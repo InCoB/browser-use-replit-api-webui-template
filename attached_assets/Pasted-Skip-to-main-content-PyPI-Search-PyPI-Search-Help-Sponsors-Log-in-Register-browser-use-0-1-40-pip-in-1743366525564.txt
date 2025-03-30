@@ -1,0 +1,189 @@
+Skip to main content
+PyPI
+Search PyPI Search
+Help Sponsors Log in Register
+browser-use 0.1.40
+pip install browser-use
+Latest version
+Released: Feb 23, 2025
+Make websites accessible for AI agents
+Navigation
+ Project description
+ Release history
+ Download files
+Verified details 
+These details have been verified by PyPI
+Maintainers
+ Avatar for gregpr07 from gravatar.com gregpr07
+Unverified details
+These details have not been verified by PyPI
+Meta
+License: MIT License
+Author: Gregor Zunic
+Requires: Python <4.0, >=3.11
+Provides-Extra: dev
+Classifiers
+License
+OSI Approved :: MIT License
+Operating System
+OS Independent
+Programming Language
+Python :: 3
+Sponsored: Python Software Foundation
+American Express is a Maintaining sponsor of the Python Software Foundation.
+PSF Sponsor · Served ethically
+Project description
+ Shows a black Browser Use Logo in light color mode and a white one in dark color mode.
+Enable AI to control your browser 🤖
+GitHub stars Discord Documentation Cloud Twitter Follow Twitter Follow Weave Badge
+🌐 Browser-use is the easiest way to connect your AI agents with the browser.
+💡 See what others are building and share your projects in our Discord - we'd love to see what you create!
+🌩️ Skip the setup - try our hosted version for instant browser automation! Try it now.
+Quick start
+With pip (Python>=3.11):
+pip install browser-use
+install playwright:
+playwright install
+Spin up your agent:
+from langchain_openai import ChatOpenAI
+from browser_use import Agent
+import asyncio
+from dotenv import load_dotenv
+load_dotenv()
+
+async def main():
+    agent = Agent(
+        task="Go to Reddit, search for 'browser-use', click on the first post and return the first comment.",
+        llm=ChatOpenAI(model="gpt-4o"),
+    )
+    result = await agent.run()
+    print(result)
+
+asyncio.run(main())
+Add your API keys for the provider you want to use to your .env file.
+OPENAI_API_KEY=
+For other settings, models, and more, check out the documentation 📕.
+Test with UI
+You can test browser-use with a UI repository
+Or simply run the gradio example:
+uv pip install gradio
+python examples/ui/gradio_demo.py
+Demos
+
+
+Task: Add grocery items to cart, and checkout.
+AI Did My Groceries
+
+
+Prompt: Add my latest LinkedIn follower to my leads in Salesforce.
+LinkedIn to Salesforce
+
+
+Prompt: Read my CV & find ML jobs, save them to a file, and then start applying for them in new tabs, if you need help, ask me.'
+https://github.com/user-attachments/assets/171fb4d6-0355-46f2-863e-edb04a828d04
+
+
+Prompt: Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.
+Letter to Papa
+
+
+Prompt: Look up models with a license of cc-by-sa-4.0 and sort by most likes on Hugging face, save top 5 to file.
+https://github.com/user-attachments/assets/de73ee39-432c-4b97-b4e8-939fd7f323b3
+
+
+More examples
+For more examples see the examples folder or join the Discord and show off your project.
+Vision
+Tell your computer what to do, and it gets it done.
+Roadmap
+Agent
+ Improve agent memory (summarize, compress, RAG, etc.)
+ Enhance planning capabilities (load website specific context)
+ Reduce token consumption (system prompt, DOM state)
+DOM Extraction
+ Improve extraction for datepickers, dropdowns, special elements
+ Improve state representation for UI elements
+Rerunning tasks
+ LLM as fallback
+ Make it easy to define workfows templates where LLM fills in the details
+ Return playwright script from the agent
+Datasets
+ Create datasets for complex tasks
+ Benchmark various models against each other
+ Fine-tuning models for specific tasks
+User Experience
+ Human-in-the-loop execution
+ Improve the generated GIF quality
+ Create various demos for tutorial execution, job application, QA testing, social media, etc.
+Contributing
+We love contributions! Feel free to open issues for bugs or feature requests. To contribute to the docs, check out the /docs folder.
+Local Setup
+To learn more about the library, check out the local setup 📕.
+Cooperations
+We are forming a commission to define best practices for UI/UX design for browser agents. Together, we're exploring how software redesign improves the performance of AI agents and gives these companies a competitive advantage by designing their existing software to be at the forefront of the agent age.
+Email Toby to apply for a seat on the committee.
+Citation
+If you use Browser Use in your research or project, please cite:
+@software{browser_use2024,
+  author = {Müller, Magnus and Žunič, Gregor},
+  title = {Browser Use: Enable AI to control your browser},
+  year = {2024},
+  publisher = {GitHub},
+  url = {https://github.com/browser-use/browser-use}
+}
+
+Twitter Follow Twitter Follow
+Made with ❤️ in Zurich and San Francisco
+
+Help
+Installing packages
+Uploading packages
+User guide
+Project name retention
+FAQs
+About PyPI
+PyPI Blog
+Infrastructure dashboard
+Statistics
+Logos & trademarks
+Our sponsors
+Contributing to PyPI
+Bugs and feedback
+Contribute on GitHub
+Translate PyPI
+Sponsor PyPI
+Development credits
+Using PyPI
+Terms of Service
+Report security issue
+Code of conduct
+Privacy Notice
+Acceptable Use Policy
+Status: All Systems Operational
+Developed and maintained by the Python community, for the Python community.
+Donate today!
+"PyPI", "Python Package Index", and the blocks logos are registered trademarks of the Python Software Foundation.
+© 2025 Python Software Foundation
+Site map
+ English   español   français   日本語   português (Brasil)   українська   Ελληνικά   Deutsch   中文 (简体)   中文 (繁體)   русский   עברית   Esperanto   한국어
+AWS
+AWS
+Cloud computing and Security Sponsor
+Datadog
+Datadog
+Monitoring
+Fastly
+Fastly
+CDN
+Google
+Google
+Download Analytics
+Pingdom
+Pingdom
+Monitoring
+Sentry
+Sentry
+Error logging
+StatusPage
+StatusPage
+Status page
