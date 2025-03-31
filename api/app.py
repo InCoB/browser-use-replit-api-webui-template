@@ -6,6 +6,7 @@ import asyncio
 import subprocess
 import traceback
 import platform
+import inspect
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -159,6 +160,7 @@ async def run_browser_task(task_id, task_description, model_name):
         try:
             import playwright
             from playwright._impl._browser_type import BrowserType
+            import browser_use
             from browser_use import Agent as BrowserAgent, BrowserConfig
             print(f"Playwright version {getattr(playwright, '__version__', 'unknown')} and browser-use version {getattr(browser_use, '__version__', 'unknown')} found.")
         except ImportError as e:
@@ -187,7 +189,6 @@ async def run_browser_task(task_id, task_description, model_name):
 
             # Define our patched launch method
             def patched_launch(self, **kwargs):
-                global original_launch # Use the stored original method
                 print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
                 # Force the executable path to NIX Chromium
                 kwargs['executablePath'] = chromium_path
@@ -419,7 +420,6 @@ def health_check():
 
             # Define our patched launch method for health check
             def health_patched_launch(self, **kwargs):
-                global original_launch # Use the stored original method for health check scope
                 print(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
                 kwargs['executablePath'] = nix_chromium_path
                 kwargs['headless'] = True
