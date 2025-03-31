@@ -1,5 +1,10 @@
 {pkgs}: {
   deps = [
+    pkgs.glib
+    pkgs.fontconfig
+    pkgs.xorg.libXcursor
+    pkgs.xorg.libXext
+    pkgs.xorg.libX11
     pkgs.cairo
     pkgs.libxcrypt
     pkgs.pango

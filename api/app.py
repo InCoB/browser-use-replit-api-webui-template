@@ -4,6 +4,8 @@ import uuid
 import time
 import asyncio
 import subprocess
+import traceback
+import platform
 from datetime import datetime
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -39,7 +41,15 @@ library_paths = [
     "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
     "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
     "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
-    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib"
+    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
+    "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
+    # Add paths for newly installed dependencies
+    "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
+    "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
+    "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
+    "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
+    "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
+    "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
 ]
 
 # Join all library paths and add them to LD_LIBRARY_PATH
@@ -100,6 +110,11 @@ def get_model_instance(model_name):
         # Return the model name string as a fallback
         return model_name
 
+def detect_glibc_error(error_str):
+    """Detect if an error message contains references to GLIBC incompatibility"""
+    glibc_markers = ['GLIBC_', 'libc.so.6', 'version `GLIBC_', 'libglib-2.0.so.0']
+    return any(marker in error_str for marker in glibc_markers)
+
 async def run_browser_task(task_id, task_description, model_name):
     """Run a browser task asynchronously"""
     try:
@@ -107,9 +122,21 @@ async def run_browser_task(task_id, task_description, model_name):
         tasks[task_id]["status"] = "running"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
         
-        # Force simulation mode due to missing dependencies
-        # We've tried installing cairo but still have issues with libcairo.so.2
-        simulation_mode = True
+        # Check for known system compatibility issues
+        # If we've detected GLIBC issues in previous runs, use simulation mode
+        simulation_mode = False
+        
+        # Try to detect if we're on an incompatible system
+        try:
+            from browser_use import Agent
+            print(f"browser-use imported successfully for task {task_id}")
+        except Exception as e:
+            error_str = str(e)
+            if detect_glibc_error(error_str):
+                print(f"GLIBC compatibility issues detected: {error_str}")
+                simulation_mode = True
+                
+        print(f"Running task {task_id} in simulation mode: {simulation_mode}")
         
         if simulation_mode:
             # In simulation mode, we'll create a simulated response instead of using actual browser
@@ -395,13 +422,41 @@ def health_check():
     # Check if we're in simulation mode
     simulation_mode = os.environ.get("BROWSER_USE_SIMULATION_MODE", "false").lower() == "true"
     
+    # Check for GLIBC compatibility issues
+    glibc_compatible = True
+    glibc_error = None
+    try:
+        # Try to run a quick browser test
+        import subprocess
+        result = subprocess.run(
+            ["/home/runner/workspace/.cache/ms-playwright/chromium-1091/chrome-linux/chrome", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=2
+        )
+        if result.returncode != 0:
+            error_text = result.stderr
+            if detect_glibc_error(error_text):
+                glibc_compatible = False
+                glibc_error = error_text
+    except Exception as e:
+        if detect_glibc_error(str(e)):
+            glibc_compatible = False
+            glibc_error = str(e)
+    
     health_data = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "environment": {
-            "simulation_mode": simulation_mode
+            "simulation_mode": simulation_mode,
+            "glibc_compatible": glibc_compatible
         }
     }
+    
+    if not glibc_compatible:
+        health_data["environment"]["glibc_error"] = glibc_error
+        health_data["environment"]["notes"] = "System has GLIBC compatibility issues; browser automation will fall back to simulation mode."
     
     # Add system resource information
     try:
