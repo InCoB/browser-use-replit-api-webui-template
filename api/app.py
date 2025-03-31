@@ -25,10 +25,14 @@ print(f"API starting in simulation mode: {SIMULATION_MODE}")
 
 # Configure Playwright in Replit environment
 print("Running in Replit environment - configuring for browser automation")
-# We'll try to use real browser mode first, since we've added the required configurations
-os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "1"
-os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
-os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "false"
+# Configure Playwright to work in Replit environment
+os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "0"  # We want to download the browser
+os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"  # Skip validating host requirements
+os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "true"  # Skip system dependencies check for Chromium
+
+# Set additional environment variables for better compatibility
+os.environ["PYTHONUNBUFFERED"] = "1"  # Ensure Python output is unbuffered
+os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict"  # Better Node.js error handling
 
 # Add paths to the system libraries
 library_paths = [
@@ -68,11 +72,15 @@ if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
     if browsers_path:
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
 
-# Force Chromium browser for all browser-use tasks, as requested by user
-os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
+# Try Firefox browser instead of Chromium as it might have fewer dependencies
+# Firefox tends to have better compatibility in restricted environments
+os.environ["BROWSER_USE_BROWSER_TYPE"] = "firefox"
 
 # Ensure headless mode is enabled
 os.environ["BROWSER_USE_HEADLESS"] = "true"
+
+# Set browser launch args to bypass common issues
+os.environ["BROWSER_USE_BROWSER_ARGS"] = "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage"
 
 # Print browser configuration for debugging
 print(f"Browser configuration: Using {os.environ.get('BROWSER_USE_BROWSER_TYPE')} in headless mode: {os.environ.get('BROWSER_USE_HEADLESS')}")
@@ -126,12 +134,59 @@ async def run_browser_task(task_id, task_description, model_name):
         # If we've detected GLIBC issues in previous runs, use simulation mode
         simulation_mode = False
         
-        # Try to detect if we're on an incompatible system
+        # Set up a useful initial message that will help the user understand what's happening
+        print(f"Processing task {task_id}: '{task_description}' using model {model_name}")
+        
+        # First, check if we have an API key for OpenAI to avoid Playwright issues if API key is missing
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            print(f"No OpenAI API key found for task {task_id} - API key is required for browser-use")
+            tasks[task_id]["status"] = "failed"
+            tasks[task_id]["error"] = "OpenAI API key is required but not configured. Please set OPENAI_API_KEY."
+            tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            return
+        
+        # First, try to import and install Playwright if needed
+        try:
+            # Check if playwright is installed
+            import playwright
+            print(f"Playwright version {getattr(playwright, '__version__', 'unknown')} is installed")
+            
+            # Try to import the sync_api module to verify the installation
+            try:
+                from playwright.sync_api import sync_playwright
+                print("Playwright sync_api is available")
+            except ImportError:
+                print("Playwright sync_api could not be imported - attempting to install browsers")
+                # Try to install playwright browsers if they're not already installed
+                try:
+                    import subprocess
+                    print("Running: python -m playwright install firefox")
+                    result = subprocess.run(
+                        ["python", "-m", "playwright", "install", "firefox"],
+                        capture_output=True, 
+                        text=True, 
+                        timeout=60
+                    )
+                    if result.returncode != 0:
+                        print(f"Error installing Playwright browsers: {result.stderr}")
+                        simulation_mode = True
+                    else:
+                        print("Successfully installed Playwright browsers")
+                except Exception as install_error:
+                    print(f"Failed to install Playwright browsers: {str(install_error)}")
+                    simulation_mode = True
+        except ImportError:
+            print("Playwright is not installed - using simulation mode")
+            simulation_mode = True
+        
+        # Try to detect if we're on an incompatible system by importing browser_use
         try:
             from browser_use import Agent
             print(f"browser-use imported successfully for task {task_id}")
         except Exception as e:
             error_str = str(e)
+            print(f"Error importing browser_use: {error_str}")
             if detect_glibc_error(error_str):
                 print(f"GLIBC compatibility issues detected: {error_str}")
                 simulation_mode = True

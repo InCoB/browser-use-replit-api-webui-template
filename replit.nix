@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.python311Packages.playwright
+    pkgs.playwright
     pkgs.glib
     pkgs.fontconfig
     pkgs.xorg.libXcursor
