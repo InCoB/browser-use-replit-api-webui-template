@@ -7,7 +7,13 @@ import { useToast } from '@/hooks/use-toast';
 
 // Simple fetch function
 async function fetchApi(url: string) {
-  const response = await fetch(url);
+  const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
+  
+  const response = await fetch(url, {
+    headers: {
+      'X-API-Key': apiKey,
+    }
+  });
   if (!response.ok) {
     throw new Error(`API Error: ${response.statusText}`);
   }
@@ -16,10 +22,13 @@ async function fetchApi(url: string) {
 
 // Simple post function
 async function postApi(url: string, data: any) {
+  const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
+  
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
     },
     body: JSON.stringify(data),
   });
