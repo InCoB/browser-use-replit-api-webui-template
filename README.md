@@ -9,7 +9,13 @@ A brief description of your project.
     *   When reloading the shell or environment, if prompted "Install Replit's Python tools [y/n]", press **'n' (no)**. This project uses Poetry to manage dependencies, and allowing Replit's tools to manage them simultaneously can cause conflicts.
     *   Run `poetry install` in the Shell tab to install Python dependencies based on `poetry.lock`.
     *   Run `npm install` in the Shell tab to install Node.js dependencies.
-3.  **Environment Variables:** Copy `.env.example` to `.env` and fill in your `OPENAI_API_KEY`. Verify the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` is correct for your Replit environment (run `which chromium | cat` in the shell if needed).
+3.  **Environment Variables:**
+    *   Copy `.env.example` to `.env`.
+    *   Fill in your `OPENAI_API_KEY`.
+    *   **API Key:** Generate a secure secret key (e.g., a UUID) and set it for both `EXTERNAL_API_KEY` and `VITE_EXTERNAL_API_KEY`.
+        *   `EXTERNAL_API_KEY`: Used by the Python backend (`api/auth.py`) to verify incoming requests to protected endpoints.
+        *   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.**
+    *   Verify the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` is correct for your Replit environment (run `which chromium | cat` in the shell if needed).
 4.  **Running:** Use the "Run" button in Replit, which executes the `dev` script in `package.json`. This script uses `concurrently` to start both the Node.js server (`tsx server/index.ts`) and the Python API backend (`poetry run python api/app.py`).
 
 ## Browser Automation Notes
@@ -32,3 +38,10 @@ A brief description of your project.
     ```
 *   **Browser Path:** If browser tasks fail, double-check the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` in `.env` matches the output of `which chromium | cat` in the shell.
 *   **Port Conflicts:** If you see "Address already in use", ensure only the `concurrently` script in `package.json` is starting the Python API (check that `server/routes.ts` doesn't also try to start it).
+
+## API Authentication
+
+*   The project uses `EXTERNAL_API_KEY` and `VITE_EXTERNAL_API_KEY` for API authentication.
+*   Generate a secure secret key (e.g., a UUID) and set it for both variables in `.env`.
+*   `EXTERNAL_API_KEY`: Used by the Python backend (`api/auth.py`) to verify incoming requests to protected endpoints.
+*   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.**

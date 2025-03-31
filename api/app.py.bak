@@ -165,11 +165,11 @@ async def run_browser_task(task_id, task_description, model_name):
             from browser_use import Agent as BrowserAgent, BrowserConfig
             print(f"Playwright version {getattr(playwright, '__version__', 'unknown')} and browser-use version {getattr(browser_use, '__version__', 'unknown')} found.")
         except ImportError as e:
-            print(f"Import error for Playwright or browser-use: {e}")
-            tasks[task_id]["status"] = "failed"
-            tasks[task_id]["error"] = f"Required library not found: {e}"
-            tasks[task_id]["updated_at"] = datetime.now().isoformat()
-            return
+             print(f"Import error for Playwright or browser-use: {e}")
+             tasks[task_id]["status"] = "failed"
+             tasks[task_id]["error"] = f"Required library not found: {e}"
+             tasks[task_id]["updated_at"] = datetime.now().isoformat()
+             return
         
         llm = get_model_instance(model_name)
         print(f"Initializing Agent for task: {task_id}")
@@ -180,7 +180,7 @@ async def run_browser_task(task_id, task_description, model_name):
             print(f"Applying Playwright patch for task {task_id}")
             chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
             if not chromium_path or not os.path.exists(chromium_path):
-                raise RuntimeError(f"NIX Chromium executable not found or path not set: {chromium_path}")
+                 raise RuntimeError(f"NIX Chromium executable not found or path not set: {chromium_path}")
 
                 print(f"Using NIX Chromium at path: {chromium_path}")
 
@@ -190,21 +190,21 @@ async def run_browser_task(task_id, task_description, model_name):
                     
                     # Define our patched launch method
                     def patched_launch(self, **kwargs):
-                    print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
-                    # Force the executable path to NIX Chromium
+                print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
+                # Force the executable path to NIX Chromium
                         kwargs['executablePath'] = chromium_path
-                    # Force headless mode to True
-                    kwargs['headless'] = True
-                    # Ensure env is properly initialized and set skip validation
+                # Force headless mode to True
+                kwargs['headless'] = True
+                # Ensure env is properly initialized and set skip validation
                         if 'env' not in kwargs or kwargs['env'] is None:
                             kwargs['env'] = {}
                         if isinstance(kwargs['env'], dict):
                             kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
-                    # Call the original stored launch method
-                    if original_launch:
+                # Call the original stored launch method
+                if original_launch:
                         return original_launch(self, **kwargs)
-                    else:
-                        raise RuntimeError("Original Playwright launch method not captured.")
+                else:
+                    raise RuntimeError("Original Playwright launch method not captured.")
                     
                     # Apply the patch
                     BrowserType.launch = patched_launch
@@ -454,7 +454,7 @@ def health_check():
                 if original_launch:
                         return original_launch(self, **kwargs)
                 else:
-                    raise RuntimeError("Health Check: Original launch method not captured.")
+                     raise RuntimeError("Health Check: Original launch method not captured.")
                     
                     # Apply the patch
             BrowserType.launch = health_patched_launch
@@ -624,11 +624,11 @@ def health_check():
 
     if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
             health_data["status"] = "unhealthy"
-        # Add more specific notes if needed
-        if not api_key_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
-        if not playwright_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."
-        if not browser_use_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
-        # Note for nix chromium failure already added above
+            # Add more specific notes if needed
+            if not api_key_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
+            if not playwright_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."
+            if not browser_use_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
+            # Note for nix chromium failure already added above
         
     return jsonify(health_data), 200
 

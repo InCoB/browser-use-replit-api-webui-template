@@ -21,3 +21,10 @@ export function formatDate(date: Date): string {
 export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+export function throwIfResNotOk(response: Response): Response {
+  if (!response.ok) {
+    throw new Error(`API request failed with status ${response.status}`);
+  }
+  return response;
+}

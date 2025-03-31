@@ -34,12 +34,22 @@ async function proxyRequest(req: Request, res: Response, endpoint: string) {
       const url = `http://localhost:5001${endpoint}`;
       console.log(`Proxying ${req.method} request to ${url}`);
       
+      // Construct headers for the outgoing request
+      const outgoingHeaders: Record<string, string> = {
+        // Ensure Content-Type is passed if relevant
+        'Content-Type': req.headers['content-type'] || 'application/json',
+      };
+
+      // Forward the X-API-Key header if it exists on the incoming request
+      const apiKeyHeader = req.headers['x-api-key']; // Headers are lowercased by Express
+      if (apiKeyHeader) {
+        outgoingHeaders['X-API-Key'] = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader;
+      }
+
+      // Construct options for fetch
       const options: any = {
         method: req.method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        // Add a timeout to the request
+        headers: outgoingHeaders, // Use the constructed headers
         timeout: 30000, // 30 seconds
       };
 
