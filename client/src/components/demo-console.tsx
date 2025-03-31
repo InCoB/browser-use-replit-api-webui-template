@@ -5,37 +5,96 @@ import { Card } from '@/components/ui/card';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
-// Simple fetch function
+// Enhanced fetch function with better error handling
 async function fetchApi(url: string) {
   const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
   
-  const response = await fetch(url, {
-    headers: {
-      'X-API-Key': apiKey,
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'X-API-Key': apiKey,
+      }
+    });
+    
+    if (!response.ok) {
+      // Handle HTTP errors with more context
+      if (response.status === 401) {
+        throw new Error('API authorization failed. Please check your API key.');
+      }
+      
+      // Try to get detailed error from response if possible
+      try {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || errorData.error || `API Error (${response.status}): ${response.statusText}`
+        );
+      } catch (parseError) {
+        // If we can't parse the error as JSON, just use the status
+        throw new Error(`API Error (${response.status}): ${response.statusText}`);
+      }
     }
-  });
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+    
+    return response.json();
+  } catch (error) {
+    // Handle network/connection errors specially
+    if (error instanceof TypeError && error.message.includes('NetworkError') ||
+        error instanceof Error && error.message.includes('ECONNREFUSED')) {
+      throw new Error(
+        'Unable to connect to the browser automation service. The server may be overloaded or restarting.'
+      );
+    }
+    // Rethrow other errors
+    throw error;
   }
-  return response.json();
 }
 
-// Simple post function
+// Enhanced post function with better error handling
 async function postApi(url: string, data: any) {
   const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
   
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': apiKey,
-    },
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': apiKey,
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      // Handle HTTP errors with more context
+      if (response.status === 401) {
+        throw new Error('API authorization failed. Please check your API key.');
+      }
+      
+      // Try to get detailed error from response if possible
+      try {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || errorData.error || `API Error (${response.status}): ${response.statusText}`
+        );
+      } catch (parseError) {
+        // If we can't parse the error as JSON, just use the status
+        throw new Error(`API Error (${response.status}): ${response.statusText}`);
+      }
+    }
+    
+    return response.json();
+  } catch (error) {
+    // Handle network/connection errors specially
+    if (error instanceof TypeError && error.message.includes('NetworkError') ||
+        error instanceof Error && (
+          error.message.includes('ECONNREFUSED') || 
+          error.message.includes('Failed to fetch')
+        )) {
+      throw new Error(
+        'Unable to connect to the browser automation service. The server may be overloaded or restarting.'
+      );
+    }
+    // Rethrow other errors
+    throw error;
   }
-  return response.json();
 }
 
 interface LlmModel {
@@ -283,15 +342,45 @@ export function DemoConsole() {
                         </svg>
                         <span>Running task... {taskData?.status === 'running' && 'The AI agent is now controlling the browser.'}</span>
                       </div>
+                    ) : createTaskMutation.isError ? (
+                      <div className="text-sm text-red-600 whitespace-pre-wrap">
+                        <div className="font-bold mb-2">Failed to Start Task:</div>
+                        <div>{createTaskMutation.error instanceof Error ? createTaskMutation.error.message : 'Unknown error'}</div>
+                        
+                        {createTaskMutation.error instanceof Error && 
+                         createTaskMutation.error.message.includes('connect to the browser automation') && (
+                          <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
+                            <div className="font-bold">Browser Automation Service Unavailable</div>
+                            <p className="mt-1">The browser automation service is currently unavailable. This may be due to:</p>
+                            <ul className="list-disc pl-5 mt-1 space-y-1">
+                              <li>High resource usage in the Replit environment</li>
+                              <li>The Python API server may have crashed due to memory constraints</li>
+                              <li>A temporary network issue</li>
+                            </ul>
+                            <p className="mt-2">Please try again in a few moments or try with a simpler task.</p>
+                          </div>
+                        )}
+                      </div>
                     ) : results ? (
                       typeof results === 'string' && results.startsWith('Error:') ? (
                         <div className="text-sm text-red-600 whitespace-pre-wrap">
                           <div className="font-bold mb-1">An error occurred:</div>
                           <div>{(results as string).replace('Error: ', '')}</div>
                           
-                          {(results as string).includes('Browser automation error') && (
-                            <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">
-                              <strong>Browser dependency issue detected</strong>
+                          {(results as string).includes('ECONNREFUSED') || (results as string).includes('Failed to communicate') ? (
+                            <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
+                              <div className="font-bold">Browser Automation Service Unavailable</div>
+                              <p className="mt-1">The browser automation service is currently unavailable. This may be due to:</p>
+                              <ul className="list-disc pl-5 mt-1 space-y-1">
+                                <li>High resource usage in the Replit environment</li>
+                                <li>The Python API server may have crashed while executing the browser task</li>
+                                <li>A temporary network issue</li>
+                              </ul>
+                              <p className="mt-2">Please try restarting the application or try with a simpler task.</p>
+                            </div>
+                          ) : (results as string).includes('Browser automation error') && (
+                            <div className="mt-3 p-3 bg-red-50 rounded border border-red-200">
+                              <div className="font-bold">Browser Dependency Issue Detected</div>
                               <p className="mt-1">This error is often caused by missing system dependencies required by Playwright for browser automation. The browser-use library needs these dependencies to control web browsers.</p>
                             </div>
                           )}
