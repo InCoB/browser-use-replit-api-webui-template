@@ -266,10 +266,11 @@ async def run_browser_task(task_id, task_description, model_name):
                     
                     # Define our patched launch method
                     def patched_launch(self, **kwargs):
-                        print(f"Patched Playwright launch called, forcing executablePath={chromium_path}")
-                        # Force the executable path to NIX Chromium, regardless of what was passed
-                        # Use the correct parameter name 'executablePath' instead of 'executable_path'
+                        print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
+                        # Force the executable path to NIX Chromium
                         kwargs['executablePath'] = chromium_path
+                        # Force headless mode to True, overriding any other setting
+                        kwargs['headless'] = True
                         
                         # Ensure env is properly initialized
                         if 'env' not in kwargs or kwargs['env'] is None:

@@ -38,48 +38,70 @@ try:
     print(f"playwright version: {getattr(playwright, '__version__', 'unknown')}")
     
     # Check for browser installation
-    print("\nChecking browser installation...")
+    print("\nApplying Playwright monkey patch and checking browser installation...")
     from playwright.sync_api import sync_playwright
+    from playwright._impl._browser_type import BrowserType
     
-    # Apply monkey patch for BrowserType.launch before initializing playwright
+    # --- Apply monkey patch ONCE here ---
     chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
+    if not chromium_path or not os.path.exists(chromium_path):
+        print(f"WARNING: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH not set or file not found: {chromium_path}")
+        print("Patch might not work correctly.")
+
     try:
-        # Import the BrowserType class to apply monkey patch
-        from playwright._impl._browser_type import BrowserType
-        
-        # Store the original launch method
-        original_launch = BrowserType.launch
-        
-        # Define a patched launch method that forces the NIX Chromium executable
+        # Store the original launch method if not already stored
+        if original_launch is None:
+            original_launch = BrowserType.launch
+            print("Stored original Playwright launch method.")
+
+        # Define a patched launch method that forces NIX Chromium and headless mode
         def patched_launch(self, **kwargs):
-            print(f"Patched Playwright launch called, forcing executablePath={chromium_path}")
-            
+            global original_launch # Ensure we are using the globally stored original method
+            print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
+
             # Force the executable path to NIX Chromium using correct parameter name
-            kwargs['executablePath'] = chromium_path
-            
+            if chromium_path: # Only force if path is valid
+                 kwargs['executablePath'] = chromium_path
+            else:
+                 print("WARNING: Cannot force executablePath, PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH is invalid.")
+
+            # Force headless mode to True
+            kwargs['headless'] = True
+
             # Ensure env is properly initialized
             if 'env' not in kwargs or kwargs['env'] is None:
                 kwargs['env'] = {}
-            
+
             # Add skip validation flag if env is a dictionary
             if isinstance(kwargs['env'], dict):
                 kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
-            
-            return original_launch(self, **kwargs)
-        
+
+            # Call the original stored launch method
+            if original_launch:
+                 return original_launch(self, **kwargs)
+            else:
+                 # Fallback if original_launch wasn't captured (should not happen)
+                 print("ERROR: Original launch method not found!")
+                 raise RuntimeError("Original Playwright launch method not captured.")
+
+
         # Apply the patch
         BrowserType.launch = patched_launch
-        print("Playwright monkey patch applied successfully")
+        print("Playwright monkey patch applied successfully.")
     except Exception as e:
         print(f"Failed to apply Playwright monkey patch: {e}")
-    
+        sys.exit(1) # Exit if patching failed, tests below will likely fail
+
+    # --- End of monkey patch section ---
+
     with sync_playwright() as p:
-        print("Playwright initialized successfully")
-        
-        # Only test Chromium with our patched browser launch
-        print("\nTesting monkey-patched Chromium:")
+        print("Playwright initialized successfully.")
+
+        # Test Chromium using the patch (should force executable and headless)
+        print("\nTesting Patched Chromium launch:")
         try:
-            browser = p.chromium.launch(headless=True)
+            # No need to specify executablePath or headless=True here, patch handles it
+            browser = p.chromium.launch()
             version = browser.version
             context = browser.new_context()
             page = context.new_page()
@@ -88,160 +110,132 @@ try:
             print(f"  Successfully loaded page with title: {title}")
             page.close()
             browser.close()
-            print(f"  Chromium: OK - version {version}")
+            print(f"  Patched Chromium: OK - version {version}")
         except Exception as e:
-            print(f"  Chromium: ERROR - {e}")
-            # Print error details
+            print(f"  Patched Chromium: ERROR - {e}")
             import traceback
-            print(f"  Detailed error for Chromium:")
+            print(f"  Detailed error for Patched Chromium:")
             print(f"  {traceback.format_exc()}")
-        
-        # Then try with the Nix Chromium executable path
-        print("\nTesting with NIX Chromium executable path:")
+
+        # Explicitly test with NIX Chromium path (redundant but good sanity check)
+        print("\nTesting Explicit NIX Chromium executable path (should also be headless via patch):")
         try:
-            chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
-            if chromium_path:
+            if chromium_path and os.path.exists(chromium_path):
                 print(f"  Using Chromium at: {chromium_path}")
-                # Check if file exists
-                if os.path.exists(chromium_path):
-                    print(f"  Chromium executable exists at path")
-                    # Launch with explicit executable path using correct parameter name
-                    browser = p.chromium.launch(
-                        executablePath=chromium_path,
-                        headless=True
-                    )
-                    version = browser.version
-                    context = browser.new_context()
-                    page = context.new_page()
-                    page.goto('https://example.com')
-                    title = page.title()
-                    print(f"  Successfully loaded page with title: {title}")
-                    browser.close()
-                    print(f"  NIX Chromium: OK - version {version}")
-                else:
-                    print(f"  ERROR: Chromium executable not found at path")
+                # Patch should override executablePath, but we pass it anyway for clarity
+                # Patch will also force headless=True
+                browser = p.chromium.launch(executablePath=chromium_path)
+                version = browser.version
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto('https://example.com')
+                title = page.title()
+                print(f"  Successfully loaded page with title: {title}")
+                browser.close()
+                print(f"  Explicit NIX Chromium: OK - version {version}")
             else:
-                print(f"  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH not set")
+                print(f"  Skipping test: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH not valid ({chromium_path})")
         except Exception as e:
-            print(f"  NIX Chromium: ERROR - {e}")
-            # Print error details
+            print(f"  Explicit NIX Chromium: ERROR - {e}")
             import traceback
-            print(f"  Detailed error for NIX Chromium:")
+            print(f"  Detailed error for Explicit NIX Chromium:")
             print(f"  {traceback.format_exc()}")
-                
+
 except ImportError as e:
     print(f"Failed to import playwright: {e}")
 except Exception as e:
-    print(f"Error checking browsers: {e}")
-    # Print error details
+    print(f"Error during Playwright setup or tests: {e}")
     import traceback
     print(f"Detailed error:")
     print(f"{traceback.format_exc()}")
 
-# Finally, test browser-use with NIX Chromium directly
-print("\nTesting browser-use with NIX Chromium:")
+# Finally, test browser-use (should use the globally patched launch)
+print("\nTesting browser-use with globally patched Playwright:")
 try:
+    # No need to re-patch here, the patch applied earlier should be active
     import browser_use
     from browser_use import Agent, BrowserConfig
     import asyncio
-    
-    chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
+
     if not chromium_path or not os.path.exists(chromium_path):
-        print(f"ERROR: Chromium executable not found at: {chromium_path}")
+        print(f"ERROR: Cannot run browser-use test, NIX Chromium path is invalid: {chromium_path}")
     else:
-        print(f"Using Chromium at: {chromium_path}")
-        
-        # Apply monkey patch for Playwright's BrowserType for browser-use
-        try:
-            # Import the BrowserType class to apply the monkey patch
-            from playwright._impl._browser_type import BrowserType
-            
-            # Check if we need to restore the original launch method
-            if 'original_launch' in locals():
-                # Original launch already saved, so we can just reapply the patch
-                print("Re-applying Playwright monkey patch for browser-use")
-            else:
-                # First time patching, save the original launch method
-                original_launch = BrowserType.launch
-                print("Saved original launch method for later restoration")
-                
-            # Define a patched launch method that forces the NIX Chromium executable
-            def patched_launch(self, **kwargs):
-                print(f"browser-use: Patched Playwright launch forcing executablePath={chromium_path}")
-                
-                # Force the executable path to NIX Chromium using correct parameter name
-                kwargs['executablePath'] = chromium_path
-                
-                # Ensure env is properly initialized
-                if 'env' not in kwargs or kwargs['env'] is None:
-                    kwargs['env'] = {}
-                
-                # Add skip validation flag if env is a dictionary
-                if isinstance(kwargs['env'], dict):
-                    kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
-                
-                return original_launch(self, **kwargs)
-            
-            # Apply the patch
-            BrowserType.launch = patched_launch
-            print("Playwright monkey patch applied for browser-use")
-        except Exception as e:
-            print(f"Failed to apply Playwright monkey patch for browser-use: {e}")
-        
+        print(f"Using NIX Chromium via patched Playwright launch.")
+
         # Check what parameters BrowserConfig accepts
         import inspect
         browser_config_params = inspect.signature(BrowserConfig.__init__).parameters
         print(f"BrowserConfig parameters: {list(browser_config_params.keys())}")
-        
-        # Create browser config for the NIX Chromium using the appropriate parameters
-        # Create browser config with just the headless parameter
-        # Our monkey patching will handle the executablePath
-        browser_config = BrowserConfig(
-            headless=True
-        )
-        
+
+        # Create browser config - patch will force executablePath and headless
+        # Setting headless=True here is good practice but patch ensures it
+        browser_config = BrowserConfig(headless=True)
+
         # Check what parameters Agent accepts
         agent_params = inspect.signature(Agent.__init__).parameters
         print(f"Agent parameters: {list(agent_params.keys())}")
-        
-        # Create an agent with the custom browser config and appropriate parameters
+
+        # Create an agent instance
+        agent = None
+        llm_instance = None # Placeholder for potential LLM
+
+        # Determine how to instantiate the agent based on available parameters
         if 'browser_config' in agent_params:
+            # Preferred method: pass the browser_config
+            print("Instantiating Agent with browser_config.")
             agent = Agent(
                 task="Go to example.com and tell me the title of the page",
                 browser_config=browser_config
             )
         elif 'llm' in agent_params:
-            # We need to specify an LLM to use
-            from langchain_openai import ChatOpenAI
-            
-            # Create an LLM instance using the OPENAI_API_KEY from environment variables
-            llm = ChatOpenAI(model_name="gpt-4o")
-            
-            agent = Agent(
-                task="Go to example.com and tell me the title of the page",
-                llm=llm
-            )
+            # If browser_config is not supported but llm is required
+            print("Instantiating Agent with LLM (OpenAI API Key required in .env).")
+            try:
+                from langchain_openai import ChatOpenAI
+                # Ensure API key is set
+                if not os.getenv("OPENAI_API_KEY"):
+                     raise ValueError("OPENAI_API_KEY not found in environment variables.")
+                llm_instance = ChatOpenAI(model="gpt-4o") # Or your preferred model
+                agent = Agent(
+                    task="Go to example.com and tell me the title of the page",
+                    llm=llm_instance
+                )
+            except ImportError:
+                 print("ERROR: langchain_openai not installed. Cannot create Agent with LLM.")
+            except ValueError as ve:
+                 print(f"ERROR: {ve}")
         else:
-            # Fall back to minimal parameters
+            # Fallback if neither browser_config nor llm are parameters (older versions?)
+            print("Instantiating Agent with task only (fallback).")
             agent = Agent(
                 task="Go to example.com and tell me the title of the page"
             )
-        
-        # Run the agent synchronously
-        async def run_agent():
-            result = await agent.run()
-            print(f"Browser-use agent result: {result}")
-            
-        # Run the async function
-        print("Running browser-use agent...")
-        asyncio.run(run_agent())
-        print("Browser-use test completed successfully!")
-        
+
+        # Run the agent if instantiation was successful
+        if agent:
+            async def run_agent():
+                print("Running browser-use agent...")
+                result = await agent.run()
+                print(f"Browser-use agent result: {result}")
+
+            asyncio.run(run_agent())
+            print("Browser-use test completed successfully!")
+        else:
+            print("Could not instantiate browser_use Agent.")
+
 except ImportError as e:
-    print(f"Failed to import browser-use components: {e}")
+    print(f"Failed to import browser-use components for test: {e}")
 except Exception as e:
     print(f"Error running browser-use test: {e}")
-    # Print error details
     import traceback
     print(f"Detailed error for browser-use test:")
     print(f"{traceback.format_exc()}")
+
+# Optional: Restore original launch method at the very end
+if original_launch:
+    try:
+        from playwright._impl._browser_type import BrowserType
+        BrowserType.launch = original_launch
+        print("\nRestored original Playwright launch method.")
+    except Exception as e:
+        print(f"\nFailed to restore original Playwright launch method: {e}")
