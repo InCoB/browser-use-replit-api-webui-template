@@ -61,18 +61,19 @@ async def run_browser_task(task_id, task_description, model_name):
         # Log agent initialization
         print(f"Initializing Agent for task: {task_id}")
         
+        # Set environment variables to help browser launch
+        os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "true"
+        
         # Try different approaches to initialize the Agent
         browser_errors = []
         
-        # First attempt - try with Firefox (system installed)
+        # First attempt - try with default configuration (let browser-use decide)
         try:
-            print(f"Attempt 1: Using Firefox with no-sandbox for task {task_id}")
+            print(f"Attempt 1: Using default configuration for task {task_id}")
+            # Use only the documented parameters according to browser-use examples
             agent = Agent(
                 task=task_description,
                 llm=llm,
-                headless=True,
-                browser_type="firefox",
-                launch_args=["--no-sandbox"],
             )
             
             # Run the agent
@@ -87,18 +88,28 @@ async def run_browser_task(task_id, task_description, model_name):
             
         except Exception as error1:
             print(f"Attempt 1 failed for task {task_id}: {str(error1)}")
-            browser_errors.append(f"Firefox attempt failed: {str(error1)}")
+            browser_errors.append(f"Default configuration failed: {str(error1)}")
         
-        # Second attempt - try with Chromium
+        # Second attempt - try with custom configuration if the library supports it
         try:
-            print(f"Attempt 2: Using Chromium with no-sandbox for task {task_id}")
-            agent = Agent(
-                task=task_description,
-                llm=llm,
-                headless=True,
-                browser_type="chromium",
-                launch_args=["--no-sandbox", "--disable-gpu"],
-            )
+            print(f"Attempt 2: Using custom configuration for task {task_id}")
+            # Check if browser_use version supports browser_options parameter
+            import inspect
+            agent_params = inspect.signature(Agent.__init__).parameters
+            if 'browser_options' in agent_params:
+                agent = Agent(
+                    task=task_description,
+                    llm=llm,
+                    browser_options={
+                        'args': ['--no-sandbox', '--disable-gpu']
+                    }
+                )
+            else:
+                # If not supported, create with minimal parameters
+                agent = Agent(
+                    task=task_description,
+                    llm=llm
+                )
             
             # Run the agent
             print(f"Running agent (attempt 2) for task: {task_id}")
@@ -112,7 +123,7 @@ async def run_browser_task(task_id, task_description, model_name):
             
         except Exception as error2:
             print(f"Attempt 2 failed for task {task_id}: {str(error2)}")
-            browser_errors.append(f"Chromium attempt failed: {str(error2)}")
+            browser_errors.append(f"Custom configuration failed: {str(error2)}")
         
         # If we got here, all attempts failed
         detailed_error = (
