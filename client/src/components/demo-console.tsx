@@ -233,10 +233,24 @@ export function DemoConsole() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Running task...</span>
+                        <span>Running task... {taskData?.status === 'running' && 'The AI agent is now controlling the browser.'}</span>
                       </div>
                     ) : results ? (
-                      <pre className="text-sm whitespace-pre-wrap">{results}</pre>
+                      results.startsWith('Error:') ? (
+                        <div className="text-sm text-red-600 whitespace-pre-wrap">
+                          <div className="font-bold mb-1">An error occurred:</div>
+                          <div>{results.replace('Error: ', '')}</div>
+                          
+                          {results.includes('Browser automation error') && (
+                            <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">
+                              <strong>Browser dependency issue detected</strong>
+                              <p className="mt-1">This error is often caused by missing system dependencies required by Playwright for browser automation. The browser-use library needs these dependencies to control web browsers.</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <pre className="text-sm whitespace-pre-wrap">{results}</pre>
+                      )
                     ) : (
                       <div className="text-sm text-gray-500 italic">
                         Results will appear here after running the task...

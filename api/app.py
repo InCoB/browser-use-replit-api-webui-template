@@ -3,6 +3,7 @@ import json
 import uuid
 import time
 import asyncio
+import subprocess
 from datetime import datetime
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -16,6 +17,16 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
+
+# Ensure Playwright browsers are installed
+try:
+    print("Installing Playwright browsers...")
+    # Install just Firefox as it might have fewer dependencies
+    subprocess.run(["python", "-m", "playwright", "install", "firefox"], check=True)
+    print("Playwright Firefox browser installed successfully.")
+except Exception as e:
+    print(f"Error installing Playwright browsers: {e}")
+    print("Will try to use the system-installed Firefox browser.")
 
 # Keep track of browser tasks
 tasks = {}
@@ -46,23 +57,82 @@ async def run_browser_task(task_id, task_description, model_name):
         
         # Initialize the agent with the specified LLM
         llm = get_model_instance(model_name)
-        agent = Agent(
-            task=task_description,
-            llm=llm,
+        
+        # Log agent initialization
+        print(f"Initializing Agent for task: {task_id}")
+        
+        # Try different approaches to initialize the Agent
+        browser_errors = []
+        
+        # First attempt - try with Firefox (system installed)
+        try:
+            print(f"Attempt 1: Using Firefox with no-sandbox for task {task_id}")
+            agent = Agent(
+                task=task_description,
+                llm=llm,
+                headless=True,
+                browser_type="firefox",
+                launch_args=["--no-sandbox"],
+            )
+            
+            # Run the agent
+            print(f"Running agent for task: {task_id}")
+            result = await agent.run()
+            
+            # Success! Update task with result
+            tasks[task_id]["status"] = "completed"
+            tasks[task_id]["result"] = result
+            tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            return  # Exit the function successfully
+            
+        except Exception as error1:
+            print(f"Attempt 1 failed for task {task_id}: {str(error1)}")
+            browser_errors.append(f"Firefox attempt failed: {str(error1)}")
+        
+        # Second attempt - try with Chromium
+        try:
+            print(f"Attempt 2: Using Chromium with no-sandbox for task {task_id}")
+            agent = Agent(
+                task=task_description,
+                llm=llm,
+                headless=True,
+                browser_type="chromium",
+                launch_args=["--no-sandbox", "--disable-gpu"],
+            )
+            
+            # Run the agent
+            print(f"Running agent (attempt 2) for task: {task_id}")
+            result = await agent.run()
+            
+            # Success! Update task with result
+            tasks[task_id]["status"] = "completed"
+            tasks[task_id]["result"] = result
+            tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            return  # Exit the function successfully
+            
+        except Exception as error2:
+            print(f"Attempt 2 failed for task {task_id}: {str(error2)}")
+            browser_errors.append(f"Chromium attempt failed: {str(error2)}")
+        
+        # If we got here, all attempts failed
+        detailed_error = (
+            f"Browser automation failed. Tried multiple approaches:\n"
+            f"{browser_errors[0]}\n"
+            f"{browser_errors[1] if len(browser_errors) > 1 else ''}\n\n"
+            "This is likely due to missing system dependencies required by Playwright. "
+            "The application requires a complete browser environment to function."
         )
         
-        # Run the agent
-        result = await agent.run()
-        
-        # Update task with result
-        tasks[task_id]["status"] = "completed"
-        tasks[task_id]["result"] = result
+        print(f"All browser initialization attempts failed for task {task_id}")
+        tasks[task_id]["status"] = "failed"
+        tasks[task_id]["error"] = detailed_error
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
     
     except Exception as e:
-        # Update task with error
+        # Handle general errors
+        print(f"General error in task {task_id}: {str(e)}")
         tasks[task_id]["status"] = "failed"
-        tasks[task_id]["error"] = str(e)
+        tasks[task_id]["error"] = f"Failed to execute task: {str(e)}"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
 
 @app.route("/api/browser-tasks", methods=["POST"])
@@ -136,24 +206,65 @@ def get_supported_models():
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
-    # Check if API key is set
-    api_key = os.getenv("OPENAI_API_KEY")
-    api_key_status = "available" if api_key and api_key != "your_openai_api_key_here" else "missing"
+    health_data = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "environment": {}
+    }
     
-    # Check if Playwright is installed
+    # Check OpenAI API key
+    api_key = os.getenv("OPENAI_API_KEY")
+    health_data["environment"]["openai_api_key"] = "available" if api_key and api_key != "your_openai_api_key_here" else "missing"
+    
+    # Check Playwright installation
     try:
         import playwright
-        playwright_status = "installed"
+        health_data["environment"]["playwright"] = {
+            "status": "installed",
+            "version": getattr(playwright, "__version__", "unknown")
+        }
     except ImportError:
-        playwright_status = "missing"
+        health_data["environment"]["playwright"] = {
+            "status": "missing"
+        }
     
-    # Return health status
-    return jsonify({
-        "status": "healthy",
-        "openai_api_key": api_key_status,
-        "playwright": playwright_status,
-        "timestamp": datetime.now().isoformat()
-    }), 200
+    # Check browser-use installation
+    try:
+        import browser_use
+        health_data["environment"]["browser_use"] = {
+            "status": "installed",
+            "version": getattr(browser_use, "__version__", "unknown")
+        }
+    except ImportError:
+        health_data["environment"]["browser_use"] = {
+            "status": "missing"
+        }
+    
+    # Get Python version
+    import sys
+    health_data["environment"]["python"] = {
+        "version": sys.version,
+        "executable": sys.executable
+    }
+    
+    # Check for system dependencies common to Playwright
+    system_deps = {}
+    for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
+        try:
+            subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            system_deps[lib] = "available"
+        except:
+            system_deps[lib] = "unknown"
+    
+    health_data["environment"]["system_dependencies"] = system_deps
+    
+    # Overall status
+    if (health_data["environment"]["openai_api_key"] == "missing" or 
+        health_data["environment"]["playwright"]["status"] == "missing" or
+        health_data["environment"]["browser_use"]["status"] == "missing"):
+        health_data["status"] = "unhealthy"
+        
+    return jsonify(health_data), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
