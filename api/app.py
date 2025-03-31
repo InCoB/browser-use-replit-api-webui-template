@@ -182,32 +182,32 @@ async def run_browser_task(task_id, task_description, model_name):
             if not chromium_path or not os.path.exists(chromium_path):
                 raise RuntimeError(f"NIX Chromium executable not found or path not set: {chromium_path}")
 
-                print(f"Using NIX Chromium at path: {chromium_path}")
+            print(f"Using NIX Chromium at path: {chromium_path}")
 
             # Store original launch method if not already stored
             if 'original_launch' not in locals() or original_launch is None:
-                    original_launch = BrowserType.launch
-                    
-                    # Define our patched launch method
-                    def patched_launch(self, **kwargs):
+                original_launch = BrowserType.launch
+                
+                # Define our patched launch method
+                def patched_launch(self, **kwargs):
                     print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
                     # Force the executable path to NIX Chromium
-                        kwargs['executablePath'] = chromium_path
+                    kwargs['executablePath'] = chromium_path
                     # Force headless mode to True
                     kwargs['headless'] = True
                     # Ensure env is properly initialized and set skip validation
-                        if 'env' not in kwargs or kwargs['env'] is None:
-                            kwargs['env'] = {}
-                        if isinstance(kwargs['env'], dict):
-                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                    if 'env' not in kwargs or kwargs['env'] is None:
+                        kwargs['env'] = {}
+                    if isinstance(kwargs['env'], dict):
+                        kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
                     # Call the original stored launch method
                     if original_launch:
                         return original_launch(self, **kwargs)
                     else:
                         raise RuntimeError("Original Playwright launch method not captured.")
-                    
-                    # Apply the patch
-                    BrowserType.launch = patched_launch
+                
+                # Apply the patch
+                BrowserType.launch = patched_launch
             print("Playwright monkey patch applied successfully for task.")
 
             # Configure and run the agent
@@ -436,40 +436,40 @@ def health_check():
         try:
             print(f"Health Check: Testing NIX Chromium at {nix_chromium_path}")
             # Apply the same robust patch used in tasks
-                    from playwright.sync_api import sync_playwright
-                    from playwright._impl._browser_type import BrowserType
+            from playwright.sync_api import sync_playwright
+            from playwright._impl._browser_type import BrowserType
                     
             # Store original launch method
-                    original_launch = BrowserType.launch
+            original_launch = BrowserType.launch
                     
             # Define our patched launch method for health check
             def health_patched_launch(self, **kwargs):
                 print(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
                 kwargs['executablePath'] = nix_chromium_path
                 kwargs['headless'] = True
-                        if 'env' not in kwargs or kwargs['env'] is None:
-                            kwargs['env'] = {}
-                        if isinstance(kwargs['env'], dict):
-                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                if 'env' not in kwargs or kwargs['env'] is None:
+                    kwargs['env'] = {}
+                if isinstance(kwargs['env'], dict):
+                    kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
                 if original_launch:
-                        return original_launch(self, **kwargs)
+                    return original_launch(self, **kwargs)
                 else:
                     raise RuntimeError("Health Check: Original launch method not captured.")
                     
-                    # Apply the patch
+            # Apply the patch
             BrowserType.launch = health_patched_launch
             print("Health check: Playwright monkey patch applied.")
                     
-                    # Run a quick test with monkey-patched Playwright
-                    with sync_playwright() as p:
+            # Run a quick test with monkey-patched Playwright
+            with sync_playwright() as p:
                 browser = p.chromium.launch() # Patch handles args
                 version = browser.version
-                        page = browser.new_page()
-                        page.goto("http://example.com")
-                        title = page.title()
-                        page.close()
-                        browser.close()
-                        nix_chromium_working = True
+                page = browser.new_page()
+                page.goto("http://example.com")
+                title = page.title()
+                page.close()
+                browser.close()
+                nix_chromium_working = True
                 nix_chromium_output = f"Version: {version}. Successfully loaded '{title}' page."
                 print("Health Check: NIX Chromium test successful.")
                     
@@ -552,70 +552,69 @@ def health_check():
     
     health_data["environment"]["playwright_env"] = playwright_env
     
-        # Check installed packages and versions
+    # Check installed packages and versions
+    try:
+        import playwright
+        health_data["environment"]["playwright"] = {
+            "status": "installed",
+            "version": getattr(playwright, "__version__", "unknown")
+        }
+        
+        # Try to check browsers installation
         try:
-            import playwright
-            health_data["environment"]["playwright"] = {
-                "status": "installed",
-                "version": getattr(playwright, "__version__", "unknown")
-            }
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                health_data["environment"]["playwright"]["browsers"] = {
+                    "chromium": "available" if hasattr(p, "chromium") else "missing",
+                    "firefox": "available" if hasattr(p, "firefox") else "missing",
+                    "webkit": "available" if hasattr(p, "webkit") else "missing"
+                }
+        except Exception as browser_error:
+            health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
             
-            # Try to check browsers installation
-            try:
-                from playwright.sync_api import sync_playwright
-                with sync_playwright() as p:
-                    health_data["environment"]["playwright"]["browsers"] = {
-                        "chromium": "available" if hasattr(p, "chromium") else "missing",
-                        "firefox": "available" if hasattr(p, "firefox") else "missing",
-                        "webkit": "available" if hasattr(p, "webkit") else "missing"
-                    }
-            except Exception as browser_error:
-                health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
-                
-        except ImportError as import_error:
-            health_data["environment"]["playwright"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
+    except ImportError as import_error:
+        health_data["environment"]["playwright"] = {
+            "status": "missing",
+            "error": str(import_error)
+        }
+    
+    try:
+        import browser_use
+        health_data["environment"]["browser_use"] = {
+            "status": "installed",
+            "version": getattr(browser_use, "__version__", "unknown")
+        }
+            
+        # Check browser_use Agent constructor parameters
         try:
-            import browser_use
-            health_data["environment"]["browser_use"] = {
-                "status": "installed",
-                "version": getattr(browser_use, "__version__", "unknown")
-            }
-            
-            # Check browser_use Agent constructor parameters
-            try:
-                import inspect
-                agent_params = inspect.signature(browser_use.Agent.__init__).parameters
-                param_names = list(agent_params.keys())
-                # Remove 'self' from the list if present
-                if 'self' in param_names:
-                    param_names.remove('self')
-                health_data["environment"]["browser_use"]["supported_params"] = param_names
-            except Exception as param_error:
-                health_data["environment"]["browser_use"]["param_error"] = str(param_error)
-                
-        except ImportError as import_error:
-            health_data["environment"]["browser_use"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
-        # Check for system libraries that Playwright needs
-        system_deps = {}
-        for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
-            try:
-                result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if lib in result.stdout:
-                    system_deps[lib] = "found"
-                else:
-                    system_deps[lib] = "not found in ldconfig"
-            except Exception as e:
-                system_deps[lib] = f"check failed: {str(e)}"
-        
-        health_data["environment"]["system_dependencies"] = system_deps
+            import inspect
+            agent_params = inspect.signature(browser_use.Agent.__init__).parameters
+            param_names = list(agent_params.keys())
+            # Remove 'self' from the list if present
+            if 'self' in param_names:
+                param_names.remove('self')
+            health_data["environment"]["browser_use"]["supported_params"] = param_names
+        except Exception as param_error:
+            health_data["environment"]["browser_use"]["param_error"] = str(param_error)
+    except ImportError as import_error:
+        health_data["environment"]["browser_use"] = {
+            "status": "missing",
+            "error": str(import_error)
+        }
+    
+    # Check for system libraries that Playwright needs
+    system_deps = {}
+    for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
+        try:
+            result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if lib in result.stdout:
+                system_deps[lib] = "found"
+            else:
+                system_deps[lib] = "not found in ldconfig"
+        except Exception as e:
+            system_deps[lib] = f"check failed: {str(e)}"
+    
+    health_data["environment"]["system_dependencies"] = system_deps
     
     # Update overall status check (remove simulation mode condition)
     api_key_ok = health_data["environment"]["openai_api_key"] == "available"
@@ -623,7 +622,7 @@ def health_check():
     browser_use_ok = health_data["environment"].get("browser_use", {}).get("status") == "installed"
 
     if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
-            health_data["status"] = "unhealthy"
+        health_data["status"] = "unhealthy"
         # Add more specific notes if needed
         if not api_key_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
         if not playwright_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."

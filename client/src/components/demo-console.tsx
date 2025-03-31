@@ -4,7 +4,30 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+
+// Simple fetch function
+async function fetchApi(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// Simple post function
+async function postApi(url: string, data: any) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+  return response.json();
+}
 
 interface LlmModel {
   id: string;
@@ -53,9 +76,9 @@ export function DemoConsole() {
   // Fetch supported models from the API
   const { data: models = defaultModels } = useQuery({
     queryKey: ['/api/supported-models'],
-    queryFn: async () => {
+    queryFn: async ({ queryKey }) => {
       try {
-        const response = await apiRequest('/api/supported-models');
+        const response = await fetchApi('/api/supported-models');
         return response as LlmModel[];
       } catch (error) {
         console.error('Failed to fetch models:', error);
@@ -77,13 +100,9 @@ export function DemoConsole() {
   // Create a new browser task
   const createTaskMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest({
-        url: '/api/browser-tasks',
-        method: 'POST',
-        body: {
-          task,
-          model: selectedModel,
-        },
+      const response = await postApi('/api/browser-tasks', {
+        task,
+        model: selectedModel,
       });
       return response as { id: string; status: string };
     },
@@ -106,9 +125,9 @@ export function DemoConsole() {
   // Get task status and result
   const { data: taskData, refetch } = useQuery({
     queryKey: ['/api/browser-tasks', currentTaskId],
-    queryFn: async () => {
+    queryFn: async ({ queryKey }) => {
       if (!currentTaskId) return null;
-      const response = await apiRequest(`/api/browser-tasks/${currentTaskId}`);
+      const response = await fetchApi(`/api/browser-tasks/${currentTaskId}`);
       return response as BrowserTask;
     },
     enabled: !!currentTaskId,

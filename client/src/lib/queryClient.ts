@@ -150,7 +150,7 @@ const mutationCache = new MutationCache({
 /**
  * Creates the QueryClient instance with default configuration
  */
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
@@ -266,6 +266,72 @@ export function createMutation<TData = unknown, TVariables = unknown>(
   };
 }
 
+/**
+ * General purpose API request function
+ * 
+ * @param options String endpoint or request configuration
+ * @returns Response data
+ */
+export async function apiRequest<TData = any, TVariables = any>(
+  options: string | {
+    url: string;
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    body?: TVariables;
+    headers?: Record<string, string>;
+    baseUrl?: string;
+  }
+): Promise<TData> {
+  // Handle string endpoint as GET request to that endpoint
+  if (typeof options === 'string') {
+    return apiRequest<TData, TVariables>({
+      url: options,
+      method: 'GET'
+    });
+  }
+
+  const {
+    url,
+    method = 'GET',
+    body,
+    headers = {},
+    baseUrl = '/api'
+  } = options;
+
+  const requestOptions: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers
+    },
+    credentials: 'include'
+  };
+
+  // Add body to request if it exists and method is not GET
+  if (body && method !== 'GET') {
+    requestOptions.body = JSON.stringify(body);
+  }
+
+  const endpoint = url.startsWith('/') ? url.substring(1) : url;
+  const response = await fetch(`${baseUrl}/${endpoint}`, requestOptions);
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      errorData = await response.text();
+    }
+    
+    throw new ApiError(
+      `API ${method} request failed: ${response.statusText}`,
+      response.status,
+      errorData
+    );
+  }
+
+  return response.json();
+}
+
 // Enhanced query client with additional methods
 const enhancedQueryClient = {
   ...queryClient,
@@ -276,6 +342,7 @@ const enhancedQueryClient = {
   clearQueries,
   fetchQuery,
   createMutation,
+  apiRequest,
 };
 
 export default enhancedQueryClient;
