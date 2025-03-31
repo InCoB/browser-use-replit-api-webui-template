@@ -40,16 +40,11 @@ async function proxyRequest(req: Request, res: Response, endpoint: string) {
         'Content-Type': req.headers['content-type'] || 'application/json',
       };
 
-      // Always use the hardcoded key that matches what api/auth.py expects
-      // The value needs to match what's in the .env file: 93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9
-      const serverApiKey = process.env.EXTERNAL_API_KEY;
-      console.log(`EXTERNAL_API_KEY from environment: ${serverApiKey}`);
-      
-      // Use hardcoded key since environment variable access may be inconsistent
-      outgoingHeaders['X-API-Key'] = '93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9';
-      console.log(`Using API key for proxy request: ${outgoingHeaders['X-API-Key']}`);
-      
-      // (We're not using the client-side key for server-to-server communication)
+      // Forward the X-API-Key header if it exists on the incoming request
+      const apiKeyHeader = req.headers['x-api-key']; // Headers are lowercased by Express
+      if (apiKeyHeader) {
+        outgoingHeaders['X-API-Key'] = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader;
+      }
 
       // Construct options for fetch
       const options: any = {
