@@ -69,12 +69,13 @@ export function DemoConsole() {
   // Create a new browser task
   const createTaskMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/browser-tasks', {
+      const response = await apiRequest({
+        url: '/api/browser-tasks',
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           task,
           model: selectedModel,
-        }),
+        },
       });
       return response as { id: string; status: string };
     },
@@ -103,9 +104,10 @@ export function DemoConsole() {
       return response as BrowserTask;
     },
     enabled: !!currentTaskId,
-    refetchInterval: (data) => {
+    refetchInterval: (data: any) => {
+      if (!data) return 2000;
       // Poll more frequently if task is still running
-      return data?.status === 'completed' || data?.status === 'failed' ? false : 2000;
+      return (data.status === 'completed' || data.status === 'failed') ? false : 2000;
     },
   });
   
