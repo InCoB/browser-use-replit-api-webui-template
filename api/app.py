@@ -107,7 +107,8 @@ async def run_browser_task(task_id, task_description, model_name):
         tasks[task_id]["status"] = "running"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
         
-        # Always use simulation mode for now while we resolve dependency issues
+        # Force simulation mode due to missing dependencies
+        # We've tried installing cairo but still have issues with libcairo.so.2
         simulation_mode = True
         
         if simulation_mode:

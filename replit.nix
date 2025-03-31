@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.cairo
     pkgs.libxcrypt
     pkgs.pango
     pkgs.xorg.libXi
