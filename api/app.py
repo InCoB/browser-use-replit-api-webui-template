@@ -25,6 +25,24 @@ print(f"API starting in simulation mode: {SIMULATION_MODE}")
 
 # Configure Playwright in Replit environment
 print("Running in Replit environment - configuring for browser automation")
+
+# Add ulimit settings to increase file descriptor and process limits
+try:
+    import resource
+    # Try to increase the file descriptor limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    print(f"Current file descriptor limits: soft={soft}, hard={hard}")
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+    
+    # Try to increase the process limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+    print(f"Current process limits: soft={soft}, hard={hard}")
+    resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
+    
+    print("Resource limits increased to maximum allowed values")
+except Exception as e:
+    print(f"Could not increase resource limits: {str(e)}")
+
 # Configure Playwright to work in Replit environment
 os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "0"  # We want to download the browser
 os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"  # Skip validating host requirements
@@ -32,7 +50,7 @@ os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "true"  # Skip system depen
 
 # Set additional environment variables for better compatibility
 os.environ["PYTHONUNBUFFERED"] = "1"  # Ensure Python output is unbuffered
-os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict"  # Better Node.js error handling
+os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict --max-old-space-size=256"  # Better Node.js error handling with limited memory
 
 # Add paths to the system libraries
 library_paths = [
@@ -72,15 +90,18 @@ if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
     if browsers_path:
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
 
-# Try Firefox browser instead of Chromium as it might have fewer dependencies
-# Firefox tends to have better compatibility in restricted environments
-os.environ["BROWSER_USE_BROWSER_TYPE"] = "firefox"
+# Use chromium since we now have the updated GLIBC
+os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
 
 # Ensure headless mode is enabled
 os.environ["BROWSER_USE_HEADLESS"] = "true"
 
-# Set browser launch args to bypass common issues
-os.environ["BROWSER_USE_BROWSER_ARGS"] = "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage"
+# Set browser launch args to bypass common issues and use fewer resources
+os.environ["BROWSER_USE_BROWSER_ARGS"] = "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-extensions,--single-process,--no-zygote"
+
+# Set resource limits to avoid thread creation issues
+os.environ["BROWSER_USE_MAX_THREADS"] = "1"  # Limit thread usage
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(os.getcwd(), ".cache", "playwright")  # Use local path
 
 # Print browser configuration for debugging
 print(f"Browser configuration: Using {os.environ.get('BROWSER_USE_BROWSER_TYPE')} in headless mode: {os.environ.get('BROWSER_USE_HEADLESS')}")
@@ -371,25 +392,34 @@ def create_browser_task():
             "updated_at": datetime.now().isoformat(),
         }
         
-        # Run the task in the background
-        def run_task():
-            asyncio.run(run_browser_task(task_id, task_description, model_name))
+        # Run the task directly in the current process without creating new threads
+        # This is to avoid the "failed to create new OS thread" error
+        print(f"Starting task {task_id} directly in the current process")
         
-        # Start task in a separate thread to allow API to respond immediately
-        import threading
-        import queue
+        # Use asyncio.create_task to run the browser task asynchronously
+        # This avoids creating a new OS thread while still allowing the request to return
+        async def start_task_async():
+            loop = asyncio.get_event_loop()
+            # Schedule the task to run in the background
+            loop.create_task(run_browser_task(task_id, task_description, model_name))
         
-        # Use a better error handling approach for thread creation
+        # Run the async function to schedule the task
         try:
-            thread = threading.Thread(target=run_task)
-            thread.daemon = True
-            thread.start()
-        except (RuntimeError, OSError) as e:
-            # If we can't create a new thread due to resource limits,
-            # run the task directly in the current thread
-            print(f"Warning: Could not create a new thread - {str(e)}. Running task directly.")
-            # Execute the task directly
-            asyncio.run(run_browser_task(task_id, task_description, model_name))
+            asyncio.run(start_task_async())
+        except Exception as e:
+            print(f"Error scheduling task {task_id}: {str(e)}")
+            # If asyncio.run fails, try to run directly as a last resort
+            # This might block the request, but it's better than failing completely
+            try:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    executor.submit(lambda: asyncio.run(run_browser_task(task_id, task_description, model_name)))
+            except Exception as e2:
+                print(f"Could not run task {task_id} in any way: {str(e2)}")
+                # Update the task status to reflect the failure
+                tasks[task_id]["status"] = "failed"
+                tasks[task_id]["error"] = f"Could not start task due to resource limits: {str(e2)}"
+                tasks[task_id]["updated_at"] = datetime.now().isoformat()
         
         return jsonify({
             "id": task_id,

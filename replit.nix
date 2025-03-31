@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.glibc
     pkgs.python311Packages.playwright
     pkgs.playwright
     pkgs.glib
