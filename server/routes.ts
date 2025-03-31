@@ -1,11 +1,98 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDemoExecutionSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import fetch from "node-fetch";
+import { spawn } from "child_process";
+
+// Global variable to hold reference to Python process
+let pythonProcess: ReturnType<typeof spawn> | null = null;
+
+// Start Python API server
+function startPythonApi(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (pythonProcess) {
+      console.log("Python API already running");
+      resolve();
+      return;
+    }
+
+    console.log("Starting Python API...");
+    pythonProcess = spawn("python", ["api/app.py"]);
+
+    pythonProcess.stdout?.on("data", (data) => {
+      console.log(`Python API: ${data.toString().trim()}`);
+    });
+
+    pythonProcess.stderr?.on("data", (data) => {
+      console.error(`Python API Error: ${data.toString().trim()}`);
+    });
+
+    pythonProcess.on("error", (error) => {
+      console.error(`Failed to start Python API: ${error.message}`);
+      pythonProcess = null;
+      reject(error);
+    });
+
+    pythonProcess.on("close", (code) => {
+      console.log(`Python API process exited with code ${code}`);
+      pythonProcess = null;
+    });
+
+    // Wait for the server to start (this is a simplistic approach)
+    setTimeout(() => resolve(), 3000);
+  });
+}
+
+// Proxy request to the Python API
+async function proxyRequest(req: Request, res: Response, endpoint: string) {
+  try {
+    // Ensure Python API is running
+    if (!pythonProcess) {
+      await startPythonApi();
+    }
+
+    const url = `http://localhost:5001${endpoint}`;
+    
+    const options: any = {
+      method: req.method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+
+    // Include body for non-GET requests
+    if (req.method !== "GET" && req.body) {
+      options.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetch(url, options);
+    const data = await response.json();
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error(`Error proxying to Python API (${endpoint}):`, error);
+    res.status(500).json({ 
+      message: "Failed to communicate with Browser Use API",
+      error: (error as Error).message 
+    });
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Start Python API when server starts
+  startPythonApi().catch(err => {
+    console.error("Failed to start Python API on initialization:", err);
+  });
+
+  // Proxy routes to Python API
+  app.post("/api/browser-tasks", (req, res) => proxyRequest(req, res, "/api/browser-tasks"));
+  app.get("/api/browser-tasks", (req, res) => proxyRequest(req, res, "/api/browser-tasks"));
+  app.get("/api/browser-tasks/:taskId", (req, res) => proxyRequest(req, res, `/api/browser-tasks/${req.params.taskId}`));
+  app.get("/api/supported-models", (req, res) => proxyRequest(req, res, "/api/supported-models"));
+  app.get("/api/health", (req, res) => proxyRequest(req, res, "/api/health"));
   // Demo execution endpoint
   app.post("/api/demo/execute", async (req, res) => {
     try {

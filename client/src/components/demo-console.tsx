@@ -1,50 +1,154 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 interface LlmModel {
   id: string;
   name: string;
 }
 
-const llmModels: LlmModel[] = [
-  { id: 'gpt4o', name: 'GPT-4o' },
-  { id: 'claude3', name: 'Claude 3' },
-  { id: 'llama2', name: 'Llama 2' },
-  { id: 'gemini', name: 'Gemini Pro' }
-];
+interface BrowserTask {
+  id: string;
+  task: string;
+  model: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: string;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ApiResponse<T> {
+  json(): Promise<T>;
+  status: number;
+}
 
 export function DemoConsole() {
   const [task, setTask] = useState('Go to Reddit, search for \'browser-use\', click on the first post and return the first comment.');
-  const [selectedModel, setSelectedModel] = useState<string>('gpt4o');
-  const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState<string | null>(null);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [browserPreview, setBrowserPreview] = useState<string | null>(null);
+  const { toast } = useToast();
+  // Store the task result
+  const [results, setResults] = useState<string | null>(null);
   
+  // Default models in case API fails
+  const defaultModels: LlmModel[] = [
+    { id: 'gpt-4o', name: 'GPT-4o' },
+    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
+  ];
+  
+  // Fetch supported models from the API
+  const { data: models = defaultModels } = useQuery({
+    queryKey: ['/api/supported-models'],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest('/api/supported-models');
+        return response as LlmModel[];
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+        // Return default models if the API fails
+        return defaultModels;
+      }
+    }
+  });
+  
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
+  
+  // Set default model when models are loaded
+  useEffect(() => {
+    if (models.length > 0 && !selectedModel) {
+      setSelectedModel(models[0].id);
+    }
+  }, [models]);
+  
+  // Create a new browser task
+  const createTaskMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('/api/browser-tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          task,
+          model: selectedModel,
+        }),
+      });
+      return response as { id: string; status: string };
+    },
+    onSuccess: (data) => {
+      setCurrentTaskId(data.id);
+      toast({
+        title: 'Task created',
+        description: 'Browser task has been created and is now running.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    },
+  });
+  
+  // Get task status and result
+  const { data: taskData, refetch } = useQuery({
+    queryKey: ['/api/browser-tasks', currentTaskId],
+    queryFn: async () => {
+      if (!currentTaskId) return null;
+      const response = await apiRequest(`/api/browser-tasks/${currentTaskId}`);
+      return response as BrowserTask;
+    },
+    enabled: !!currentTaskId,
+    refetchInterval: (data) => {
+      // Poll more frequently if task is still running
+      return data?.status === 'completed' || data?.status === 'failed' ? false : 2000;
+    },
+  });
+  
+  // Start a browser task
   const handleRunDemo = async () => {
-    setIsRunning(true);
-    setResults(null);
-    setBrowserPreview(null);
-    
     try {
-      // Simulate API call to run the task
-      // In a real implementation, this would call the backend
-      setTimeout(() => {
-        setResults(`Task completed successfully!\n\nFirst comment from Reddit post about browser-use:\n\n"This tool is incredible! I've been using it to automate some tedious tasks on our company website and it's saving me hours every week. The element tracking feature is especially useful."`);
-        setBrowserPreview('Browser preview displayed here');
-        setIsRunning(false);
-      }, 3000);
+      createTaskMutation.mutate();
     } catch (error) {
-      setResults(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
-      setIsRunning(false);
+      toast({
+        title: 'Error',
+        description: `Failed to start browser task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      });
     }
   };
   
+  // Clear the current task
   const handleClearDemo = () => {
-    setResults(null);
+    setCurrentTaskId(null);
     setBrowserPreview(null);
   };
+  
+  // Update results when taskData changes
+  useEffect(() => {
+    if (taskData) {
+      if (taskData.status === 'completed' && taskData.result) {
+        setResults(taskData.result);
+      } else if (taskData.status === 'failed' && taskData.error) {
+        setResults(`Error: ${taskData.error}`);
+      }
+    }
+  }, [taskData]);
+  
+  // Clear results when clearing the task
+  useEffect(() => {
+    if (!currentTaskId) {
+      setResults(null);
+    }
+  }, [currentTaskId]);
+  
+  // Determine if the task is currently running
+  const isRunning = createTaskMutation.isPending || 
+                   (taskData?.status === 'pending' || taskData?.status === 'running');
   
   return (
     <section id="demo" className="py-16 bg-white">
@@ -73,7 +177,7 @@ export function DemoConsole() {
                 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <div className="text-sm font-medium text-gray-700 mb-1 w-full">LLM Model:</div>
-                  {llmModels.map((model) => (
+                  {models.map((model: LlmModel) => (
                     <Button
                       key={model.id}
                       variant={selectedModel === model.id ? "default" : "outline"}
