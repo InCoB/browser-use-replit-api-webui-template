@@ -20,6 +20,9 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# Print the expected API key for debugging
+print(f"API Key expected: {os.environ.get('EXTERNAL_API_KEY')}")
+
 # Configure Playwright in Replit environment
 print("Running in Replit environment - configuring for browser automation")
 
@@ -331,8 +334,9 @@ def create_browser_task():
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/browser-tasks", methods=["GET"])
+@require_api_key
 def list_browser_tasks():
-    """List all browser tasks"""
+    """List all browser tasks (requires API key)"""
     return jsonify(list(tasks.values())), 200
 
 @app.route("/api/browser-tasks/<task_id>", methods=["GET"])
@@ -367,8 +371,9 @@ def get_browser_task(task_id):
     return jsonify(serializable_task), 200
 
 @app.route("/api/supported-models", methods=["GET"])
+@require_api_key
 def get_supported_models():
-    """Get list of supported LLM models"""
+    """Get list of supported LLM models (requires API key)"""
     models = [
         {"id": "gpt-4o", "name": "GPT-4o"},
         {"id": "gpt-4-turbo", "name": "GPT-4 Turbo"},

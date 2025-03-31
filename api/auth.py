@@ -16,7 +16,12 @@ def require_api_key(f):
             print("ERROR: EXTERNAL_API_KEY environment variable not set.")
             return jsonify({"error": "Server configuration error: API Key not set."}), 500
 
+        # Debug all headers
+        print("Received headers:", dict(request.headers))
+        
         provided_key = request.headers.get('X-API-Key')
+        print(f"Provided API key: {provided_key}")
+        print(f"Expected API key: {EXPECTED_API_KEY}")
 
         if not provided_key:
             return jsonify({"error": "Unauthorized: Missing X-API-Key header."}), 401
