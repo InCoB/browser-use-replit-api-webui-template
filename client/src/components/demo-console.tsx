@@ -11,12 +11,20 @@ interface LlmModel {
   name: string;
 }
 
+interface SimulatedResult {
+  model: string;
+  result: string;
+  screenshot: string;
+  simulation: boolean;
+  task: string;
+}
+
 interface BrowserTask {
   id: string;
   task: string;
   model: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: string;
+  result?: string | SimulatedResult;
   error?: string;
   created_at: string;
   updated_at: string;
@@ -39,7 +47,7 @@ export function DemoConsole() {
   const defaultModels: LlmModel[] = [
     { id: 'gpt-4o', name: 'GPT-4o' },
     { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
+    { id: 'gpt-4', name: 'GPT-4' }
   ];
   
   // Fetch supported models from the API
@@ -134,7 +142,19 @@ export function DemoConsole() {
   useEffect(() => {
     if (taskData) {
       if (taskData.status === 'completed' && taskData.result) {
-        setResults(taskData.result);
+        // Handle the result which could be a string or an object
+        if (typeof taskData.result === 'string') {
+          setResults(taskData.result);
+        } else if (typeof taskData.result === 'object') {
+          // Extract the result string from the object
+          const resultObj = taskData.result as any;
+          // Update browser preview if there's a screenshot
+          if (resultObj.screenshot) {
+            setBrowserPreview(resultObj.screenshot);
+          }
+          // Use the string result if available
+          setResults(resultObj.result || JSON.stringify(resultObj, null, 2));
+        }
       } else if (taskData.status === 'failed' && taskData.error) {
         setResults(`Error: ${taskData.error}`);
       }
@@ -236,12 +256,12 @@ export function DemoConsole() {
                         <span>Running task... {taskData?.status === 'running' && 'The AI agent is now controlling the browser.'}</span>
                       </div>
                     ) : results ? (
-                      results.startsWith('Error:') ? (
+                      typeof results === 'string' && results.startsWith('Error:') ? (
                         <div className="text-sm text-red-600 whitespace-pre-wrap">
                           <div className="font-bold mb-1">An error occurred:</div>
-                          <div>{results.replace('Error: ', '')}</div>
+                          <div>{(results as string).replace('Error: ', '')}</div>
                           
-                          {results.includes('Browser automation error') && (
+                          {(results as string).includes('Browser automation error') && (
                             <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">
                               <strong>Browser dependency issue detected</strong>
                               <p className="mt-1">This error is often caused by missing system dependencies required by Playwright for browser automation. The browser-use library needs these dependencies to control web browsers.</p>
@@ -266,7 +286,11 @@ export function DemoConsole() {
                           <span className="text-sm text-gray-500">Loading browser preview...</span>
                         </div>
                       ) : browserPreview ? (
-                        <div className="text-sm">{browserPreview}</div>
+                        browserPreview.startsWith('data:image') ? (
+                          <img src={browserPreview} alt="Browser preview" className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <div className="text-sm">{browserPreview}</div>
+                        )
                       ) : (
                         <div className="text-center text-gray-400">
                           <i className="fas fa-desktop text-3xl mb-2"></i>
