@@ -7,7 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 
 // Enhanced fetch function with better error handling
 async function fetchApi(url: string) {
-  const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
+  // Hardcoded API key that matches what the Flask API expects
+  const apiKey = '93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9';
   
   try {
     const response = await fetch(url, {
@@ -50,7 +51,8 @@ async function fetchApi(url: string) {
 
 // Enhanced post function with better error handling
 async function postApi(url: string, data: any) {
-  const apiKey = import.meta.env.VITE_EXTERNAL_API_KEY;
+  // Hardcoded API key that matches what the Flask API expects
+  const apiKey = '93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9';
   
   try {
     const response = await fetch(url, {
