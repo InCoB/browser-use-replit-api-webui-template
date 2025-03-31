@@ -246,15 +246,87 @@ async def run_browser_task(task_id, task_description, model_name):
         # Try different approaches to initialize the Agent
         browser_errors = []
         
-        # First attempt - try with default configuration
+        # Monkey patch Playwright's browser type to use our NIX Chromium
         try:
-            print(f"Attempt 1: Using default configuration for task {task_id}")
-            # Use only the documented parameters according to browser-use examples
+            print(f"Monkey patching Playwright for task {task_id}")
+            
+            # Get the path to NIX Chromium
+            chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
+            if chromium_path and os.path.exists(chromium_path):
+                print(f"Using NIX Chromium at path: {chromium_path}")
+                # Set this environment variable explicitly in case .env didn't load properly
+                os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = chromium_path
+                
+                # Monkey patch Playwright to force NIX Chromium usage
+                try:
+                    from playwright._impl._browser_type import BrowserType
+                    
+                    # Store the original launch method
+                    original_launch = BrowserType.launch
+                    
+                    # Define our patched launch method
+                    def patched_launch(self, **kwargs):
+                        print(f"Patched Playwright launch called, forcing executablePath={chromium_path}")
+                        # Force the executable path to NIX Chromium, regardless of what was passed
+                        # Use the correct parameter name 'executablePath' instead of 'executable_path'
+                        kwargs['executablePath'] = chromium_path
+                        
+                        # Ensure env is properly initialized
+                        if 'env' not in kwargs or kwargs['env'] is None:
+                            kwargs['env'] = {}
+                        
+                        # Add skip validation flag if env is a dictionary
+                        if isinstance(kwargs['env'], dict):
+                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                        
+                        return original_launch(self, **kwargs)
+                    
+                    # Apply the patch
+                    BrowserType.launch = patched_launch
+                    print("Playwright monkey patch applied successfully")
+                except Exception as e:
+                    print(f"Failed to monkey patch Playwright: {e}")
+            else:
+                print(f"Warning: NIX Chromium executable not found at: {chromium_path}")
+                
+            # Import the necessary classes
             from browser_use import Agent as BrowserAgent
-            agent = BrowserAgent(
-                task=task_description,
-                llm=llm,
-            )
+            
+            # Try to import BrowserConfig 
+            try:
+                from browser_use import BrowserConfig
+                has_browser_config = True
+                
+                # Print the parameters BrowserConfig accepts
+                try:
+                    import inspect
+                    params = list(inspect.signature(BrowserConfig.__init__).parameters.keys())
+                    print(f"BrowserConfig accepts: {params}")
+                except Exception as e:
+                    print(f"Error inspecting BrowserConfig: {e}")
+                    
+            except ImportError:
+                has_browser_config = False
+            
+            # If we have BrowserConfig available, use it to configure NIX Chromium
+            if has_browser_config:
+                # Create minimal browser config - the monkey patch will handle the executable path
+                browser_config = BrowserConfig(
+                    headless=True
+                )
+                
+                # Create agent with browser_config
+                agent = BrowserAgent(
+                    task=task_description,
+                    llm=llm,
+                    browser_config=browser_config,
+                )
+            else:
+                # Fall back to default configuration
+                agent = BrowserAgent(
+                    task=task_description,
+                    llm=llm,
+                )
             
             # Run the agent
             print(f"Running agent for task: {task_id}")
@@ -270,16 +342,57 @@ async def run_browser_task(task_id, task_description, model_name):
             print(f"Attempt 1 failed for task {task_id}: {str(error1)}")
             browser_errors.append(f"Default configuration failed: {str(error1)}")
         
-        # Second attempt - try with custom configuration if the library supports it
+        # Second attempt - try with custom configuration and NIX Chromium
         try:
-            print(f"Attempt 2: Using custom configuration for task {task_id}")
+            print(f"Attempt 2: Using custom configuration with NIX Chromium for task {task_id}")
+            
+            # Setup the environment variable for Playwright to use our NIX Chromium
+            chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
+            if chromium_path and os.path.exists(chromium_path):
+                print(f"Using NIX Chromium at path: {chromium_path}")
+                # Set this environment variable explicitly in case .env didn't load properly
+                os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = chromium_path
+            else:
+                print(f"Warning: NIX Chromium executable not found at: {chromium_path}")
+                
             # Import the Agent class directly for this attempt
             from browser_use import Agent as BrowserUseAgent
             
             # Check if browser_use version supports context parameter
             import inspect
             agent_params = inspect.signature(BrowserUseAgent.__init__).parameters
-            if 'context' in agent_params:
+            
+            # Try to determine if BrowserConfig is available
+            try:
+                from browser_use import BrowserConfig
+                has_browser_config = True
+            except ImportError:
+                has_browser_config = False
+                
+            if has_browser_config and 'browser_config' in agent_params:
+                # Create browser config for the NIX Chromium
+                browser_config = BrowserConfig(
+                    browser_type="chromium",
+                    headless=True,
+                    executablePath=chromium_path if chromium_path and os.path.exists(chromium_path) else None,
+                )
+                
+                if 'context' in agent_params:
+                    agent = BrowserUseAgent(
+                        task=task_description,
+                        llm=llm,
+                        browser_config=browser_config,
+                        context={
+                            'system': 'You are an AI browser agent that helps users navigate websites.'
+                        }
+                    )
+                else:
+                    agent = BrowserUseAgent(
+                        task=task_description,
+                        llm=llm,
+                        browser_config=browser_config
+                    )
+            elif 'context' in agent_params:
                 agent = BrowserUseAgent(
                     task=task_description,
                     llm=llm,
@@ -308,20 +421,34 @@ async def run_browser_task(task_id, task_description, model_name):
             print(f"Attempt 2 failed for task {task_id}: {str(error2)}")
             browser_errors.append(f"Custom configuration failed: {str(error2)}")
         
-        # Third attempt - try with specific browser_use parameters for v0.1.40
+        # Third attempt - try with specific browser_use parameters and NIX Chromium
         try:
-            print(f"Attempt 3: Using specific browser_use parameters for task {task_id}")
+            print(f"Attempt 3: Using NIX Chromium executable for task {task_id}")
+            
+            # Setup the environment variable for Playwright to use our NIX Chromium
+            chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
+            if chromium_path and os.path.exists(chromium_path):
+                print(f"Using NIX Chromium at path: {chromium_path}")
+                # Set this environment variable explicitly in case .env didn't load properly
+                os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = chromium_path
+            else:
+                print(f"Warning: NIX Chromium executable not found at: {chromium_path}")
             
             # Import directly to ensure we have the latest version
-            from browser_use import Agent
+            from browser_use import Agent, BrowserConfig
             
-            # Based on the health check, we see the supported parameters for browser_use v0.1.40
-            # We'll create the agent with a more compatible set of parameters
+            # Configure the browser with explicit settings
+            browser_config = BrowserConfig(
+                browser_type="chromium",  # Use chromium since we have the NIX path for it
+                headless=True,
+                executablePath=chromium_path if chromium_path and os.path.exists(chromium_path) else None,
+            )
+            
+            # Create the agent with our custom browser configuration
             agent = Agent(
                 task=task_description,
                 llm=llm,
-                # We can't pass headless directly, so we'll rely on the environment variable
-                # BROWSER_USE_HEADLESS=true that we set earlier
+                browser_config=browser_config
             )
             
             # Run the agent
@@ -507,11 +634,15 @@ def health_check():
     # Check if we're in simulation mode
     simulation_mode = os.environ.get("BROWSER_USE_SIMULATION_MODE", "false").lower() == "true"
     
-    # Check for GLIBC compatibility issues
+    # Check for GLIBC compatibility issues and test NIX Chromium
     glibc_compatible = True
     glibc_error = None
+    nix_chromium_working = False
+    nix_chromium_output = None
+    
+    # Try default Chromium first
     try:
-        # Try to run a quick browser test
+        # Try to run a quick browser test on Playwright's default Chromium
         import subprocess
         result = subprocess.run(
             ["/home/runner/workspace/.cache/ms-playwright/chromium-1091/chrome-linux/chrome", "--version"],
@@ -529,19 +660,108 @@ def health_check():
         if detect_glibc_error(str(e)):
             glibc_compatible = False
             glibc_error = str(e)
+            
+    # Now try NIX Chromium with our monkey patching approach
+    chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+    if chromium_path and os.path.exists(chromium_path):
+        try:
+            # First try a simple version check
+            import subprocess
+            result = subprocess.run(
+                [chromium_path, "--version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=2
+            )
+            if result.returncode == 0:
+                nix_chromium_installed = True
+                nix_chromium_output = result.stdout.strip()
+            else:
+                nix_chromium_installed = False
+                nix_chromium_output = f"Error: {result.stderr}"
+                
+            # Now try a more comprehensive test with monkey patching
+            if nix_chromium_installed:
+                try:
+                    # Try to monkey patch Playwright's browser type
+                    from playwright.sync_api import sync_playwright
+                    from playwright._impl._browser_type import BrowserType
+                    
+                    # Store the original launch method
+                    original_launch = BrowserType.launch
+                    
+                    # Define our patched launch method
+                    def patched_launch(self, **kwargs):
+                        print(f"Health check: Patched Playwright launch forcing executablePath={chromium_path}")
+                        # Force the executable path to NIX Chromium
+                        kwargs['executablePath'] = chromium_path
+                        
+                        # Ensure env is properly initialized
+                        if 'env' not in kwargs or kwargs['env'] is None:
+                            kwargs['env'] = {}
+                        
+                        # Add skip validation flag if env is a dictionary
+                        if isinstance(kwargs['env'], dict):
+                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                        
+                        return original_launch(self, **kwargs)
+                    
+                    # Apply the patch
+                    BrowserType.launch = patched_launch
+                    print("Health check: Playwright monkey patch applied")
+                    
+                    # Run a quick test with monkey-patched Playwright
+                    with sync_playwright() as p:
+                        # Should use our patched launch method
+                        browser = p.chromium.launch(headless=True)
+                        
+                        # Open a page and navigate to a simple site
+                        page = browser.new_page()
+                        page.goto("http://example.com")
+                        
+                        # Get the title
+                        title = page.title()
+                        
+                        # Close nicely
+                        page.close()
+                        browser.close()
+                        
+                        # Success - our patching approach is working!
+                        nix_chromium_working = True
+                        nix_chromium_output += f"\nSuccessfully loaded '{title}' page with monkey-patched NIX Chromium"
+                    
+                    # Restore the original method after our test
+                    BrowserType.launch = original_launch
+                    
+                except Exception as e:
+                    nix_chromium_working = False
+                    nix_chromium_output += f"\nPlaywright test with monkey patching failed: {str(e)}"
+                    
+        except Exception as e:
+            nix_chromium_working = False
+            nix_chromium_output = f"Exception: {str(e)}"
     
     health_data = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "environment": {
             "simulation_mode": simulation_mode,
-            "glibc_compatible": glibc_compatible
+            "glibc_compatible": glibc_compatible,
+            "nix_chromium": {
+                "working": nix_chromium_working,
+                "path": chromium_path if chromium_path else "not set",
+                "output": nix_chromium_output
+            }
         }
     }
     
     if not glibc_compatible:
         health_data["environment"]["glibc_error"] = glibc_error
-        health_data["environment"]["notes"] = "System has GLIBC compatibility issues; browser automation will fall back to simulation mode."
+        health_data["environment"]["notes"] = "System has GLIBC compatibility issues with default Chromium; using NIX Chromium instead."
+    
+    if nix_chromium_working:
+        health_data["environment"]["notes"] = health_data.get("environment", {}).get("notes", "") + " NIX Chromium is working correctly."
     
     # Add system resource information
     try:
@@ -568,8 +788,21 @@ def health_check():
         "PLAYWRIGHT_BROWSERS_PATH": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "not set"),
         "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS": os.environ.get("PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS", "not set"),
         "BROWSER_USE_BROWSER_TYPE": os.environ.get("BROWSER_USE_BROWSER_TYPE", "not set"),
-        "BROWSER_USE_HEADLESS": os.environ.get("BROWSER_USE_HEADLESS", "not set")
+        "BROWSER_USE_HEADLESS": os.environ.get("BROWSER_USE_HEADLESS", "not set"),
+        "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH": os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "not set")
     }
+    
+    # Check if NIX Chromium exists at the specified path
+    chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+    if chromium_path:
+        playwright_env["NIX_CHROMIUM_EXISTS"] = "yes" if os.path.exists(chromium_path) else "no"
+        # Check if the file is executable
+        if os.path.exists(chromium_path):
+            try:
+                playwright_env["NIX_CHROMIUM_EXECUTABLE"] = "yes" if os.access(chromium_path, os.X_OK) else "no"
+            except Exception as e:
+                playwright_env["NIX_CHROMIUM_EXECUTABLE"] = f"check failed: {str(e)}"
+    
     health_data["environment"]["playwright_env"] = playwright_env
     
     # If we're in simulation mode, provide simulated version info
