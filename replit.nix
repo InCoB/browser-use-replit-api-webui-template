@@ -1,8 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.playwright-driver
     pkgs.glibc
-    pkgs.python311Packages.playwright
-    pkgs.playwright
     pkgs.glib
     pkgs.fontconfig
     pkgs.xorg.libXcursor
@@ -33,9 +32,7 @@
     pkgs.alsa-lib
     pkgs.dbus
     pkgs.gtk3
-    pkgs.firefox
     pkgs.chromium
-    pkgs.playwright-driver
     pkgs.gitFull
   ];
 }

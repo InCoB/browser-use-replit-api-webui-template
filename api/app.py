@@ -18,11 +18,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Mock implementation for simulation mode
-# This avoids dependency issues with langchain_openai and browser_use
-SIMULATION_MODE = os.environ.get("BROWSER_USE_SIMULATION_MODE", "false").lower() == "true"
-print(f"API starting in simulation mode: {SIMULATION_MODE}")
-
 # Configure Playwright in Replit environment
 print("Running in Replit environment - configuring for browser automation")
 
@@ -113,11 +108,7 @@ tasks = {}
 
 def get_model_instance(model_name):
     """Get the appropriate LLM instance based on model name"""
-    # In simulation mode, we don't need actual model instances
-    if SIMULATION_MODE:
-        return model_name
-    
-    # If not in simulation mode, try to load and use the real model
+    # Always try to load and use the real model
     try:
         # Check if API key is available
         api_key = os.getenv("OPENAI_API_KEY")
@@ -138,12 +129,13 @@ def get_model_instance(model_name):
         return models.get(model_name, models["gpt-4o"])  # Default to gpt-4o if model not found
     except Exception as e:
         print(f"Error initializing LLM model: {str(e)}")
-        # Return the model name string as a fallback
-        return model_name
+        # If LLM fails to load, maybe raise an error or return None?
+        # For now, returning model_name might cause issues later.
+        # Consider raising the exception or handling it more gracefully.
+        raise ValueError(f"Failed to initialize LLM {model_name}: {e}")
 
 async def run_browser_task(task_id, task_description, model_name):
     """Run a browser task asynchronously using patched Playwright"""
-    # Store the original launch method reference if needed (for restoration, though less critical in long-running API)
     original_launch = None
 
     try:
@@ -151,25 +143,7 @@ async def run_browser_task(task_id, task_description, model_name):
         tasks[task_id]["status"] = "running"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
 
-        # Check if BROWSER_USE_SIMULATION_MODE is explicitly set
-        simulation_mode = os.environ.get("BROWSER_USE_SIMULATION_MODE", "false").lower() == "true"
-        if simulation_mode:
-            print(f"Running task {task_id} in explicit simulation mode")
-            # ... (keep simulation mode logic as before) ...
-            await asyncio.sleep(3)
-            simulated_result = {
-                "simulation": True,
-                "task": task_description,
-                "model": model_name,
-                "result": f"Simulated result for task: {task_description}",
-                "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-            }
-            tasks[task_id]["status"] = "completed"
-            tasks[task_id]["result"] = simulated_result
-            tasks[task_id]["updated_at"] = datetime.now().isoformat()
-            return
-
-        # --- Start of simplified browser task logic ---
+        # --- Start of browser task logic (no simulation check) ---
         print(f"Processing task {task_id}: '{task_description}' using model {model_name}")
 
         # Check API key
@@ -262,25 +236,15 @@ async def run_browser_task(task_id, task_description, model_name):
             print(f"Task {task_id} completed successfully.")
 
         except Exception as error:
-            # Capture the error from the primary attempt
+            # Capture the error from the browser attempt
             browser_error = str(error)
             print(f"Browser task {task_id} failed: {browser_error}")
             traceback.print_exc() # Print detailed traceback for debugging
 
-            # Fallback to simulation mode on any failure during the browser run
-            print(f"Falling back to simulation mode for task {task_id} due to error.")
-            await asyncio.sleep(1) # Short delay
-            simulated_result = {
-                "simulation": True,
-                "task": task_description,
-                "model": model_name,
-                "result": f"Browser automation failed. Simulated response for: {task_description}",
-                "failure_reason": f"Browser automation failed: {browser_error}",
-                "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-            }
-            # Update task as completed (but simulated)
-            tasks[task_id]["status"] = "completed"
-            tasks[task_id]["result"] = simulated_result
+            # Mark task as failed - removed fallback to simulation
+            tasks[task_id]["status"] = "failed"
+            tasks[task_id]["error"] = f"Browser automation failed: {browser_error}"
+            tasks[task_id]["result"] = None # Ensure result is None on failure
             tasks[task_id]["updated_at"] = datetime.now().isoformat()
 
         finally:
@@ -437,7 +401,6 @@ def get_system_resources():
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
-    simulation_mode = os.environ.get("BROWSER_USE_SIMULATION_MODE", "false").lower() == "true"
     nix_chromium_working = False
     nix_chromium_output = "Test not run or failed."
     nix_chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
@@ -507,11 +470,9 @@ def health_check():
 
 
     health_data = {
-        "status": "healthy", # Assume healthy unless checks fail later
+        "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "environment": {
-            "simulation_mode": simulation_mode,
-            # Removed glibc_compatible field
             "nix_chromium": {
                 "working": nix_chromium_working,
                 "path": nix_chromium_path if nix_chromium_path else "not set",
@@ -520,11 +481,11 @@ def health_check():
         }
     }
 
-    # Add notes based on test results
-    if not nix_chromium_working and not simulation_mode:
+    # Update notes logic
+    if not nix_chromium_working:
          health_data["status"] = "unhealthy"
          health_data["environment"]["notes"] = f"NIX Chromium test failed. Check logs. Output: {nix_chromium_output}"
-    elif nix_chromium_working:
+    else: # Simplified from elif nix_chromium_working
          health_data["environment"]["notes"] = "NIX Chromium appears to be working correctly."
 
     # Add system resource information
@@ -567,95 +528,83 @@ def health_check():
     
     health_data["environment"]["playwright_env"] = playwright_env
     
-    # If we're in simulation mode, provide simulated version info
-    if simulation_mode:
-        health_data["environment"]["browser_use"] = {
-            "status": "simulated",
-            "version": "0.1.40"
-        }
+    # Check installed packages and versions
+    try:
+        import playwright
         health_data["environment"]["playwright"] = {
-            "status": "simulated",
-            "version": "1.40.0"
+            "status": "installed",
+            "version": getattr(playwright, "__version__", "unknown")
         }
-    else:
-        # Check installed packages and versions
+        
+        # Try to check browsers installation
         try:
-            import playwright
-            health_data["environment"]["playwright"] = {
-                "status": "installed",
-                "version": getattr(playwright, "__version__", "unknown")
-            }
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                health_data["environment"]["playwright"]["browsers"] = {
+                    "chromium": "available" if hasattr(p, "chromium") else "missing",
+                    "firefox": "available" if hasattr(p, "firefox") else "missing",
+                    "webkit": "available" if hasattr(p, "webkit") else "missing"
+                }
+        except Exception as browser_error:
+            health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
             
-            # Try to check browsers installation
-            try:
-                from playwright.sync_api import sync_playwright
-                with sync_playwright() as p:
-                    health_data["environment"]["playwright"]["browsers"] = {
-                        "chromium": "available" if hasattr(p, "chromium") else "missing",
-                        "firefox": "available" if hasattr(p, "firefox") else "missing",
-                        "webkit": "available" if hasattr(p, "webkit") else "missing"
-                    }
-            except Exception as browser_error:
-                health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
-                
-        except ImportError as import_error:
-            health_data["environment"]["playwright"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
-        try:
-            import browser_use
-            health_data["environment"]["browser_use"] = {
-                "status": "installed",
-                "version": getattr(browser_use, "__version__", "unknown")
-            }
-            
-            # Check browser_use Agent constructor parameters
-            try:
-                import inspect
-                agent_params = inspect.signature(browser_use.Agent.__init__).parameters
-                param_names = list(agent_params.keys())
-                # Remove 'self' from the list if present
-                if 'self' in param_names:
-                    param_names.remove('self')
-                health_data["environment"]["browser_use"]["supported_params"] = param_names
-            except Exception as param_error:
-                health_data["environment"]["browser_use"]["param_error"] = str(param_error)
-                
-        except ImportError as import_error:
-            health_data["environment"]["browser_use"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
-        # Check for system libraries that Playwright needs
-        system_deps = {}
-        for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
-            try:
-                result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if lib in result.stdout:
-                    system_deps[lib] = "found"
-                else:
-                    system_deps[lib] = "not found in ldconfig"
-            except Exception as e:
-                system_deps[lib] = f"check failed: {str(e)}"
-        
-        health_data["environment"]["system_dependencies"] = system_deps
+    except ImportError as import_error:
+        health_data["environment"]["playwright"] = {
+            "status": "missing",
+            "error": str(import_error)
+        }
     
-    # Update overall status check based on simplified criteria
-    if not simulation_mode:
-        api_key_ok = health_data["environment"]["openai_api_key"] == "available"
-        playwright_ok = health_data["environment"].get("playwright", {}).get("status") == "installed"
-        browser_use_ok = health_data["environment"].get("browser_use", {}).get("status") == "installed"
+    try:
+        import browser_use
+        health_data["environment"]["browser_use"] = {
+            "status": "installed",
+            "version": getattr(browser_use, "__version__", "unknown")
+        }
+        
+        # Check browser_use Agent constructor parameters
+        try:
+            import inspect
+            agent_params = inspect.signature(browser_use.Agent.__init__).parameters
+            param_names = list(agent_params.keys())
+            # Remove 'self' from the list if present
+            if 'self' in param_names:
+                param_names.remove('self')
+            health_data["environment"]["browser_use"]["supported_params"] = param_names
+        except Exception as param_error:
+            health_data["environment"]["browser_use"]["param_error"] = str(param_error)
+            
+    except ImportError as import_error:
+        health_data["environment"]["browser_use"] = {
+            "status": "missing",
+            "error": str(import_error)
+        }
+    
+    # Check for system libraries that Playwright needs
+    system_deps = {}
+    for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
+        try:
+            result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if lib in result.stdout:
+                system_deps[lib] = "found"
+            else:
+                system_deps[lib] = "not found in ldconfig"
+        except Exception as e:
+            system_deps[lib] = f"check failed: {str(e)}"
+    
+    health_data["environment"]["system_dependencies"] = system_deps
+    
+    # Update overall status check (remove simulation mode condition)
+    api_key_ok = health_data["environment"]["openai_api_key"] == "available"
+    playwright_ok = health_data["environment"].get("playwright", {}).get("status") == "installed"
+    browser_use_ok = health_data["environment"].get("browser_use", {}).get("status") == "installed"
 
-        if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
-             health_data["status"] = "unhealthy"
-             # Add more specific notes if needed
-             if not api_key_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
-             if not playwright_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."
-             if not browser_use_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
-             # Note for nix chromium failure already added above
+    if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
+            health_data["status"] = "unhealthy"
+            # Add more specific notes if needed
+            if not api_key_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
+            if not playwright_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."
+            if not browser_use_ok: health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
+            # Note for nix chromium failure already added above
 
     return jsonify(health_data), 200
 

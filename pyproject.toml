@@ -12,7 +12,7 @@ langchain-openai = "0.3.1"
 flask = "^3.1.0"
 flask-cors = "^5.0.1"
 python-dotenv = "^1.1.0"
-poetry = "^2.1.2"
+poetry = "^1.7.1"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
@@ -25,5 +25,5 @@ select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']
 ignore = ['W291', 'W292', 'W293']
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.0.0,<2.0.0"]
 build-backend = "poetry.core.masonry.api"
