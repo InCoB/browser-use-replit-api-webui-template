@@ -23,6 +23,31 @@ print("Running in Replit environment - configuring for browser automation")
 # We'll try to use real browser mode first, since we've added the required configurations
 os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "1"
 os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
+os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "false"
+
+# Add paths to the system libraries
+library_paths = [
+    "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
+    "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
+    "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
+    "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
+    "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
+    "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
+    "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
+    "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
+    "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
+    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib"
+]
+
+# Join all library paths and add them to LD_LIBRARY_PATH
+lib_path_str = ":".join(library_paths)
+if "LD_LIBRARY_PATH" in os.environ:
+    os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
+else:
+    os.environ["LD_LIBRARY_PATH"] = lib_path_str
+
+# Print the library path for debugging
+print(f"LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH')}")
 
 # Set environment variables from .env if not already set
 if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
@@ -30,8 +55,8 @@ if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
     if browsers_path:
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
 
-# Force Firefox browser for all browser-use tasks
-os.environ["BROWSER_USE_BROWSER_TYPE"] = "firefox"
+# Force Chromium browser for all browser-use tasks, as requested by user
+os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
 
 # Ensure headless mode is enabled
 os.environ["BROWSER_USE_HEADLESS"] = "true"

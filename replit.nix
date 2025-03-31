@@ -1,5 +1,16 @@
 {pkgs}: {
   deps = [
+    pkgs.pango
+    pkgs.xorg.libXi
+    pkgs.xorg.libXtst
+    pkgs.xorg.libXrender
+    pkgs.xorg.libXfixes
+    pkgs.xorg.libXdamage
+    pkgs.xorg.libXcomposite
+    pkgs.xorg.libXrandr
+    pkgs.libxkbcommon
+    pkgs.chromium-xorg-conf
+    pkgs.xorg.libxcb
     pkgs.jq
     pkgs.mesa
     pkgs.expat

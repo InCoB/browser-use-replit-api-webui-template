@@ -1,0 +1,15 @@
+Python API: INFO     [agent] 🚀 Starting task: Go to https://replit.com and tell me what you see on the homepage
+Python API: INFO     [agent] 📍 Step 1
+Python API Error: Skipping host requirements validation logic because `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS` env variable is set.
+Python API: ERROR    [browser] Failed to initialize Playwright browser: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /home/runner/workspace/.cache/ms-playwright/chromium-1091/chrome-linux/chrome --disable-field-trial-config --disable-background-networking --enable-features=NetworkService,NetworkServiceInProcess --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=ImprovedCookieControls,LazyFrameLoading,GlobalMediaControls,DestroyProfileOnBrowserClose,MediaRouter,DialMediaRouteProvider,AcceptCHFrame,AutoExpandDetailsElement,CertificateTransparencyComponentUpdater,AvoidUnnecessaryBeforeUnloadCheckSync,Translate,HttpsUpgrades --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --enable-automation --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --no-sandbox --no-sandbox --disable-blink-features=AutomationControlled --disable-infobars --disable-background-timer-throttling --disable-popup-blocking --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-window-activation --disable-focus-on-load --no-first-run --no-default-browser-check --no-startup-window --window-position=0,0 --disable-web-security --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process --user-data-dir=/tmp/playwright_chromiumdev_profile-9FIQiQ --remote-debugging-pipe --no-startup-window
+<launched> pid=989
+[pid=989][err] /home/runner/workspace/.cache/ms-playwright/chromium-1091/chrome-linux/chrome: error while loading shared libraries: libxcb.so.1: cannot open shared object file: No such file or directory
+[pid=989] <process did exit: exitCode=127, signal=null>
+[pid=989] starting temporary directories cleanup
+Python API: WARNING  [browser] Page load failed, continuing...
+Python API Error: Skipping host requirements validation logic because `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS` env variable is set.
+Python API: ERROR    [browser] Failed to initialize Playwright browser: Target page, context or browser has been closed
+Browser logs:
