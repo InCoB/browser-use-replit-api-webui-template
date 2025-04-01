@@ -1,5 +1,7 @@
 """Check browser installation and accessibility using a global monkey patch
-   AND patching the Agent._run_planner method to use main LLM (v2)."""
+   AND patching the Agent._run_planner method to use main LLM (v2).
+   Includes increased max_steps. Task set to fill interactive form.
+"""
 
 import os
 import sys
@@ -65,7 +67,6 @@ if AGENT_CLASS_AVAILABLE:
             # Check if planning should even run
             if not self.settings.planner_llm or not main_llm:
                 print("DEBUG Patch: Planner LLM not configured or Main LLM missing, skipping planner.")
-                # Call original in case it has logic for skipping
                 if not original_agent_run_planner: raise RuntimeError("Original _run_planner not captured!")
                 return await original_agent_run_planner(self, *args, **kwargs)
 
@@ -88,23 +89,18 @@ if AGENT_CLASS_AVAILABLE:
                 if not self.settings.use_vision_for_planner and self.settings.use_vision:
                     last_state_message = planner_messages[-1]
                     new_msg = ''
-                    # Ensure content is processed correctly (handle str/list)
                     content_to_process = last_state_message.content
                     if isinstance(content_to_process, list):
                         for msg_item in content_to_process:
-                            # Check if item is dict and type is text
                             if isinstance(msg_item, dict) and msg_item.get('type') == 'text':
                                 new_msg += msg_item.get('text', '')
                     elif isinstance(content_to_process, str):
-                         new_msg = content_to_process # Keep string content as is
-
-                    # Only replace if content changed (i.e., image was removed)
+                         new_msg = content_to_process
                     if new_msg != content_to_process:
                          planner_messages[-1] = type(last_state_message)(content=new_msg)
 
-
                 # Convert messages using main model name (copied logic)
-                main_model_name = getattr(main_llm, 'model', 'Unknown') # Use actual model name
+                main_model_name = getattr(main_llm, 'model', 'Unknown')
                 planner_messages = convert_input_messages(planner_messages, main_model_name)
 
                 # --- CORE PATCH: Invoke main_llm ---
@@ -119,7 +115,7 @@ if AGENT_CLASS_AVAILABLE:
                          plan = self._remove_think_tags(plan)
 
                 # Log plan (copied logic)
-                log_func = getattr(self, 'logger', None) # Use self.logger if available
+                log_func = getattr(self, 'logger', None)
                 info_func = getattr(log_func, 'info', print) if log_func else print
                 debug_func = getattr(log_func, 'debug', print) if log_func else print
                 try:
@@ -134,12 +130,9 @@ if AGENT_CLASS_AVAILABLE:
                 return plan # Return the generated plan string
 
             except Exception as e:
-                # Log error and re-raise or handle as appropriate
                 log_func = getattr(self, 'logger', None)
                 error_func = getattr(log_func, 'error', print) if log_func else print
                 error_func(f'Error during patched planning execution: {str(e)}')
-                # Fallback to original method might be desired here, or raise
-                # For now, let's re-raise to see the error from the main LLM call
                 raise RuntimeError(f'Patched planning failed: {e}') from e
         # --- End Patched Method ---
 
@@ -151,6 +144,7 @@ if AGENT_CLASS_AVAILABLE:
 else:
     print("WARN: browser_use.Agent not available. Internal patch not applied.")
 # === End browser_use Agent Patch ===
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -249,26 +243,40 @@ try:
     print(f"Using Main LLM: {getattr(main_llm, 'model', '?')}, Planner LLM configured as: {getattr(planner_llm, 'model', '?')}")
     print("Note: Internal patch attempts to USE MAIN LLM during planning step.")
 
+    # --- Define the NEW interactive form task ---
+    form_filling_task = (
+        "Navigate to the booking.com website and fill in the form with the following information: howeover you need think about the order as it may be different from this prompt"
+        "Find the 'Hotels' search form section. Input 'London' as the destination city."
+        "Attempt to select check-in and check-out dates approximately one month from today (Use May 1, 2025 for check-in and May 5, 2025 for check-out). " # Using specific dates for clarity
+        "Set the number of Adults to 2. "
+        "Click the search button associated with the hotel form. "
+        "Finally, report the main heading or title found on the search results page. Describe any difficulties encountered, especially with the date picker."
+    )
+    print(f"\nUsing New Task:\n{form_filling_task}\n")
+    # --------------------------------------
+
     print("Initializing Agent...")
     # The Agent class itself now has the patched _run_planner method (if patch applied successfully)
     agent = Agent(
-        task=(
-            "Act as an expert travel planner. Navigate to https://www.lonelyplanet.com and use both textual and visual cues to extract destination hints. "
-            "Then generate a creative weekend getaway itinerary that includes recommended flights, hotels, local attractions, and personalized travel tips. "
-            "Output the final itinerary in JSON format."
-        ),
+        task=form_filling_task, # Use the new form filling task
         llm=main_llm,
         planner_llm=planner_llm, # Still pass the planner object for settings/init checks
-        use_vision=True,
+        use_vision=True, # Vision might be helpful for complex forms
         use_vision_for_planner=False, # This setting might be moot if main LLM is used by patch
-        planner_interval=4,
+        planner_interval=4, # Keep planner active to ensure patch runs if needed
         save_conversation_path="logs/conversation"
     )
 
     async def run_agent():
         print("Running browser-use agent (with patched planner execution)...")
-        history = await agent.run()
+        # --- Set max_steps here ---
+        max_steps_to_run = 150 # Keep increased max_steps
+        print(f"Running agent for maximum {max_steps_to_run} steps...")
+        history = await agent.run(max_steps=max_steps_to_run)
+        # --------------------------
         print("\nAgent Run Completed.")
+        steps_taken = agent.state.n_steps -1 if hasattr(agent,'state') else len(history.history)
+        print(f"Agent ran for {steps_taken} steps.")
         print("Visited URLs:", history.urls())
         final_result = history.final_result()
         print("Final result type:", type(final_result))

@@ -13,5 +13,7 @@ vite.config.ts.*
 
 # Logging
 api.log
+logs
+agent_output.json
 
 # Python cache/build files

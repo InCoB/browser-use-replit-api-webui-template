@@ -425,7 +425,7 @@ export function DemoConsole() {
           
           <div className="bg-gray-100 px-6 py-4 border-t border-gray-200">
             <div className="text-sm text-gray-500">
-              <i className="fas fa-info-circle mr-1"></i> This demo runs in the cloud. For local usage, check out our <a href="#documentation" className="text-primary hover:text-primary-700">installation guide</a>.
+              <i className="fas fa-info-circle mr-1"></i> Enjoy <a href="#documentation" className="text-primary hover:text-primary-700"> (c) InCoB 2025</a>.
             </div>
           </div>
         </Card>
