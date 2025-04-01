@@ -70,19 +70,19 @@ app.logger.info(f"Log Level: {log_level_name}")
 # Configure Playwright in Replit environment
 if os.environ.get('REPL_ID'):
     app.logger.debug("Replit environment detected, configuring resource limits and Playwright...")
-    # Add ulimit settings to increase file descriptor and process limits
-    try:
-        import resource
-        # Try to increase the file descriptor limit
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+# Add ulimit settings to increase file descriptor and process limits
+try:
+    import resource
+    # Try to increase the file descriptor limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
         app.logger.debug(f"File descriptor limit set to {hard}")
-        
-        # Try to increase the process limit
-        soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
-        resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
+    
+    # Try to increase the process limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+    resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
         app.logger.debug(f"Process limit set to {hard}")
-    except Exception as e:
+except Exception as e:
         app.logger.warning(f"Could not increase resource limits: {str(e)}")
 
     # Configure Playwright environment variables
@@ -92,33 +92,33 @@ if os.environ.get('REPL_ID'):
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict --max-old-space-size=256"
 
-    # Add paths to the system libraries
-    library_paths = [
-        "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
-        "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
-        "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
-        "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
-        "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
-        "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
-        "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
-        "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
-        "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
-        "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
-        "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
-        "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
-        "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
-        "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
-        "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
-        "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
-        "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
-    ]
+# Add paths to the system libraries
+library_paths = [
+    "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
+    "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
+    "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
+    "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
+    "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
+    "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
+    "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
+    "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
+    "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
+    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
+    "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
+    "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
+    "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
+    "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
+    "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
+    "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
+    "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
+]
 
-    # Join all library paths and add them to LD_LIBRARY_PATH
-    lib_path_str = ":".join(library_paths)
-    if "LD_LIBRARY_PATH" in os.environ:
-        os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
-    else:
-        os.environ["LD_LIBRARY_PATH"] = lib_path_str
+# Join all library paths and add them to LD_LIBRARY_PATH
+lib_path_str = ":".join(library_paths)
+if "LD_LIBRARY_PATH" in os.environ:
+    os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
+else:
+    os.environ["LD_LIBRARY_PATH"] = lib_path_str
 
     # Configure browser settings
     os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
@@ -180,8 +180,8 @@ def get_model_instance(model_name):
         else:
             # Fallback or default model (e.g., default to gpt-4o)
             app.logger.warning(f"Unknown model prefix for '{model_name}'. Defaulting to gpt-4o.")
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key or api_key == "your_openai_api_key_here":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
                 app.logger.error("OpenAI API key not configured for default model.")
                 raise ValueError("OpenAI API key not configured for default model.")
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
@@ -244,26 +244,26 @@ async def run_browser_task(task_id, task_description, model_name):
 
             # Store original launch method if not already stored
             if 'original_launch' not in locals() or original_launch is None:
-                original_launch = BrowserType.launch
+                    original_launch = BrowserType.launch
                 app.logger.debug("Original Playwright launch method captured.")
-                
-                # Define our patched launch method
-                def patched_launch(self, **kwargs):
+                    
+                    # Define our patched launch method
+                    def patched_launch(self, **kwargs):
                     app.logger.debug(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
-                    kwargs['executablePath'] = chromium_path
+                        kwargs['executablePath'] = chromium_path
                     kwargs['headless'] = True
-                    if 'env' not in kwargs or kwargs['env'] is None:
-                        kwargs['env'] = {}
-                    if isinstance(kwargs['env'], dict):
-                        kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                        if 'env' not in kwargs or kwargs['env'] is None:
+                            kwargs['env'] = {}
+                        if isinstance(kwargs['env'], dict):
+                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
                     if original_launch:
                         return original_launch(self, **kwargs)
                     else:
                         app.logger.error("Original Playwright launch method not captured before patching.")
                         raise RuntimeError("Original Playwright launch method not captured.")
-                
-                # Apply the patch
-                BrowserType.launch = patched_launch
+                    
+                    # Apply the patch
+                    BrowserType.launch = patched_launch
                 app.logger.debug("Playwright monkey patch applied.")
             else:
                 app.logger.debug("Playwright patch already applied.")
@@ -324,78 +324,82 @@ async def run_browser_task(task_id, task_description, model_name):
 @app.route("/api/browser-tasks", methods=["POST"])
 @require_api_key
 def create_browser_task():
-    """Create a new browser task (requires API key)"""
     try:
         data = request.json
-        task_description = data.get("task")
-        model_name = data.get("model", "gpt-4o")
-        
-        if not task_description:
-            app.logger.warning("Create task request missing task description.")
-            return jsonify({"error": "Task description is required"}), 400
-        
+        if not data or "task" not in data:
+            return jsonify({"error": "Missing 'task' in request body"}), 400
+
+        task_description = data["task"]
+        model_name = data.get("model", "gpt-4o") # Default to gpt-4o
         task_id = str(uuid.uuid4())
-        app.logger.info(f"Creating new task {task_id} for: '{task_description[:50]}...'")
         
         tasks[task_id] = {
             "id": task_id,
             "task": task_description,
             "model": model_name,
             "status": "pending",
+            "result": None,
+            "error": None,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
         }
-        
-        app.logger.debug(f"Starting task {task_id} scheduling...")
-        
-        async def start_task_async():
-            loop = asyncio.get_event_loop()
-            loop.create_task(run_browser_task(task_id, task_description, model_name))
-            app.logger.debug(f"Task {task_id} scheduled on event loop.")
-        
+        app.logger.info(f"Received task creation request: ID {task_id}, Model {model_name}")
+
+        # --- Restore ThreadPoolExecutor logic for scheduling --- 
+        app.logger.debug(f"Attempting to schedule task {task_id}...")
         try:
-            asyncio.run(start_task_async())
-        except RuntimeError as e:
-            if "cannot run nested event loops" in str(e).lower():
-                app.logger.warning(f"Nested event loop detected for task {task_id}. Trying ThreadPoolExecutor.")
+            # Use ThreadPoolExecutor to run the async task in a separate thread
+            import concurrent.futures
+            
+            # Define the function to be run in the thread pool
+            def run_async_in_thread():
+                app.logger.debug(f"Background thread started for task {task_id}.")
+                # Create and manage a dedicated event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                app.logger.debug(f"New event loop created for task {task_id} in thread.")
                 try:
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        executor.submit(lambda: asyncio.run(run_browser_task(task_id, task_description, model_name)))
-                        app.logger.debug(f"Task {task_id} submitted via ThreadPoolExecutor.")
-                except Exception as e2:
-                    app.logger.error(f"Could not run task {task_id} via ThreadPoolExecutor: {str(e2)}", exc_info=True)
-                    tasks[task_id]["status"] = "failed"
-                    tasks[task_id]["error"] = f"Could not start task due to resource limits: {str(e2)}"
-                    tasks[task_id]["updated_at"] = datetime.now().isoformat()
-            else:
-                 app.logger.error(f"Error scheduling task {task_id} with asyncio.run: {str(e)}", exc_info=True)
-                 tasks[task_id]["status"] = "failed"
-                 tasks[task_id]["error"] = f"Could not start task due to asyncio error: {str(e)}"
-                 tasks[task_id]["updated_at"] = datetime.now().isoformat()
+                    # Run the main async task function until it completes
+                    loop.run_until_complete(run_browser_task(task_id, task_description, model_name))
+                    app.logger.debug(f"run_browser_task {task_id} completed in background thread loop.")
+                except Exception as thread_e:
+                    # Log errors happening within the async task execution itself
+                    app.logger.error(f"Error executing run_browser_task {task_id} in background thread: {thread_e}", exc_info=True)
+                    # Update task status from within the thread if possible (might be tricky if task dict access is not thread-safe)
+                    # Safest might be to rely on polling finding the error later or add thread-safe queue
+                finally:
+                    # Ensure the loop is closed
+                    app.logger.debug(f"Closing event loop for task {task_id}.")
+                    loop.close()
+                    app.logger.debug(f"Event loop closed for task {task_id}.")
+
+            # Submit the wrapper function to the thread pool executor
+            # Using only 1 worker to prevent excessive resource use per request
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_async_in_thread)
+                app.logger.debug(f"Task {task_id} submitted via ThreadPoolExecutor using dedicated loop.")
+                # Optional: could add future.add_done_callback() here 
+                # to log if the submit itself raised an exception
+
         except Exception as e:
-            app.logger.error(f"Unexpected error scheduling task {task_id}: {str(e)}", exc_info=True)
-            tasks[task_id]["status"] = "failed"
-            tasks[task_id]["error"] = f"Could not start task due to unexpected error: {str(e)}"
-            tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            # Catch errors during the scheduling/submission itself
+            app.logger.error(f"Failed to schedule task {task_id} using ThreadPoolExecutor: {e}", exc_info=True)
+                tasks[task_id]["status"] = "failed"
+            tasks[task_id]["error"] = f"Failed to start task: {e}"
+                tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            # Return error immediately if scheduling fails
+            return jsonify({"error": f"Failed to schedule task: {e}"}), 500
+        # --- End Restore --- 
+             
+        # REMOVED: Simplified asyncio.get_event_loop / asyncio.run logic
         
-        return jsonify({
-            "id": task_id,
-            "status": tasks[task_id]["status"], # Return the potentially updated status
-            "message": "Task creation initiated."
-        }), 201
+        # Return 202 Accepted immediately after scheduling attempt
+        return jsonify({"id": task_id, "status": "pending"}), 202 
     
     except Exception as e:
-        app.logger.error(f"Error in create_browser_task endpoint: {str(e)}", exc_info=True)
-        return jsonify({"error": "Internal server error during task creation."}), 500
-
-@app.route("/api/browser-tasks", methods=["GET"])
-def list_browser_tasks():
-    """List all browser tasks"""
-    app.logger.debug("Listing all browser tasks.")
-    # Return a deep copy to avoid modifying the original task data when logging status
-    tasks_list = [json.loads(json.dumps(task, default=str)) for task in tasks.values()] 
-    return jsonify(tasks_list), 200
+        # Catch any other unexpected errors during request handling
+        app.logger.error(f"Error in create_browser_task endpoint processing request: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error during task creation processing."}), 500
 
 @app.route("/api/browser-tasks/<task_id>", methods=["GET"])
 @require_api_key
@@ -405,7 +409,7 @@ def get_browser_task(task_id):
     if task_id not in tasks:
         app.logger.warning(f"Task not found: {task_id}")
         return jsonify({"error": "Task not found"}), 404
-        
+    
     task = tasks[task_id]
     # Log task status only if it has changed since last logged (or if never logged)
     last_logged = task.get("_last_logged_status")
@@ -519,37 +523,37 @@ def health_check():
     if nix_chromium_path and os.path.exists(nix_chromium_path):
         try:
             app.logger.debug(f"Health Check: Testing NIX Chromium at {nix_chromium_path}")
-            from playwright.sync_api import sync_playwright
-            from playwright._impl._browser_type import BrowserType
-            
-            original_launch = BrowserType.launch
-            
+                    from playwright.sync_api import sync_playwright
+                    from playwright._impl._browser_type import BrowserType
+                    
+                    original_launch = BrowserType.launch
+                    
             def health_patched_launch(self, **kwargs):
                 app.logger.debug(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
                 kwargs['executablePath'] = nix_chromium_path
                 kwargs['headless'] = True
-                if 'env' not in kwargs or kwargs['env'] is None:
-                    kwargs['env'] = {}
-                if isinstance(kwargs['env'], dict):
-                    kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                        if 'env' not in kwargs or kwargs['env'] is None:
+                            kwargs['env'] = {}
+                        if isinstance(kwargs['env'], dict):
+                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
                 if original_launch:
-                    return original_launch(self, **kwargs)
+                        return original_launch(self, **kwargs)
                 else:
                     app.logger.error("Health Check: Original launch method not captured.")
                     raise RuntimeError("Health Check: Original launch method not captured.")
-            
+                    
             BrowserType.launch = health_patched_launch
             app.logger.debug("Health check: Playwright monkey patch applied.")
-            
-            with sync_playwright() as p:
+                    
+                    with sync_playwright() as p:
                 browser = p.chromium.launch() 
                 version = browser.version
-                page = browser.new_page()
-                page.goto("http://example.com")
-                title = page.title()
-                page.close()
-                browser.close()
-                nix_chromium_working = True
+                        page = browser.new_page()
+                        page.goto("http://example.com")
+                        title = page.title()
+                        page.close()
+                        browser.close()
+                        nix_chromium_working = True
                 nix_chromium_output = f"Version: {version}. Successfully loaded '{title}' page."
                 app.logger.info("Health Check: NIX Chromium test successful.")
                     
@@ -569,7 +573,7 @@ def health_check():
     else:
         nix_chromium_output = f"NIX Chromium path not set or invalid: {nix_chromium_path}"
         app.logger.warning(f"Health Check: {nix_chromium_output}")
-
+    
     health_data = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -631,76 +635,76 @@ def health_check():
     
     health_data["environment"]["playwright_env"] = playwright_env
     
-    # Check installed packages and versions
-    try:
-        import playwright
-        health_data["environment"]["playwright"] = {
-            "status": "installed",
-            "version": getattr(playwright, "__version__", "unknown")
-        }
+        # Check installed packages and versions
+        try:
+            import playwright
+            health_data["environment"]["playwright"] = {
+                "status": "installed",
+                "version": getattr(playwright, "__version__", "unknown")
+            }
         app.logger.debug("Playwright is installed.")
-        
-        # Try to check browsers installation
-        try:
-            from playwright.sync_api import sync_playwright
-            with sync_playwright() as p:
-                health_data["environment"]["playwright"]["browsers"] = {
-                    "chromium": "available" if hasattr(p, "chromium") else "missing",
-                    "firefox": "available" if hasattr(p, "firefox") else "missing",
-                    "webkit": "available" if hasattr(p, "webkit") else "missing"
-                }
-                app.logger.debug("Playwright browsers checked.")
-        except Exception as browser_error:
-            app.logger.warning(f"Error checking Playwright browsers: {browser_error}")
-            health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
             
-    except ImportError as import_error:
+            # Try to check browsers installation
+            try:
+                from playwright.sync_api import sync_playwright
+                with sync_playwright() as p:
+                    health_data["environment"]["playwright"]["browsers"] = {
+                        "chromium": "available" if hasattr(p, "chromium") else "missing",
+                        "firefox": "available" if hasattr(p, "firefox") else "missing",
+                        "webkit": "available" if hasattr(p, "webkit") else "missing"
+                    }
+                app.logger.debug("Playwright browsers checked.")
+            except Exception as browser_error:
+            app.logger.warning(f"Error checking Playwright browsers: {browser_error}")
+                health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
+                
+        except ImportError as import_error:
         app.logger.warning(f"Playwright not installed: {import_error}")
-        health_data["environment"]["playwright"] = {
-            "status": "missing",
-            "error": str(import_error)
-        }
-    
-    try:
-        import browser_use
-        health_data["environment"]["browser_use"] = {
-            "status": "installed",
-            "version": getattr(browser_use, "__version__", "unknown")
-        }
-        app.logger.debug("browser-use is installed.")
+            health_data["environment"]["playwright"] = {
+                "status": "missing",
+                "error": str(import_error)
+            }
         
-        # Check browser_use Agent constructor parameters
         try:
-            import inspect
-            agent_params = inspect.signature(browser_use.Agent.__init__).parameters
-            param_names = list(agent_params.keys())
-            # Remove 'self' from the list if present
-            if 'self' in param_names:
-                param_names.remove('self')
-            health_data["environment"]["browser_use"]["supported_params"] = param_names
+            import browser_use
+            health_data["environment"]["browser_use"] = {
+                "status": "installed",
+                "version": getattr(browser_use, "__version__", "unknown")
+            }
+        app.logger.debug("browser-use is installed.")
+            
+            # Check browser_use Agent constructor parameters
+            try:
+                import inspect
+                agent_params = inspect.signature(browser_use.Agent.__init__).parameters
+                param_names = list(agent_params.keys())
+                # Remove 'self' from the list if present
+                if 'self' in param_names:
+                    param_names.remove('self')
+                health_data["environment"]["browser_use"]["supported_params"] = param_names
             app.logger.debug(f"browser_use Agent params: {param_names}")
-        except Exception as param_error:
+            except Exception as param_error:
             app.logger.warning(f"Error checking browser_use params: {param_error}")
-            health_data["environment"]["browser_use"]["param_error"] = str(param_error)
-    except ImportError as import_error:
+                health_data["environment"]["browser_use"]["param_error"] = str(param_error)
+        except ImportError as import_error:
         app.logger.warning(f"browser-use not installed: {import_error}")
-        health_data["environment"]["browser_use"] = {
-            "status": "missing",
-            "error": str(import_error)
-        }
-    
-    # Check for system libraries that Playwright needs
-    system_deps = {}
-    for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
-        try:
-            result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if lib in result.stdout:
-                system_deps[lib] = "found"
-            else:
-                system_deps[lib] = "not found in ldconfig"
-        except Exception as e:
+            health_data["environment"]["browser_use"] = {
+                "status": "missing",
+                "error": str(import_error)
+            }
+        
+        # Check for system libraries that Playwright needs
+        system_deps = {}
+        for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
+            try:
+                result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if lib in result.stdout:
+                    system_deps[lib] = "found"
+                else:
+                    system_deps[lib] = "not found in ldconfig"
+            except Exception as e:
             app.logger.warning(f"System dependency check failed for {lib}: {e}")
-            system_deps[lib] = f"check failed: {str(e)}"
+                system_deps[lib] = f"check failed: {str(e)}"
     health_data["environment"]["system_dependencies"] = system_deps
     app.logger.debug(f"System dependencies check: {system_deps}")
 
@@ -710,7 +714,7 @@ def health_check():
     browser_use_ok = health_data["environment"].get("browser_use", {}).get("status") == "installed"
 
     if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
-        health_data["status"] = "unhealthy"
+            health_data["status"] = "unhealthy"
         # Add more specific notes if needed
         if not api_key_ok: 
             health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."

@@ -69,3 +69,30 @@ The Python API (`api/app.py`) uses Python's standard `logging` module.
 *   Generate a secure secret key (e.g., a UUID) and set it for both variables in `.env`.
 *   `EXTERNAL_API_KEY`: Used by the Python backend (`api/auth.py`) to verify incoming requests to protected endpoints.
 *   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.**
+
+*   **Resource Limits:** Monitor Replit Console for crashes due to memory/CPU limits.
+
+## Testing the API
+
+A simple Python script `api_test.py` is included to verify basic API functionality.
+
+1.  **Ensure the main application is running** (click the "Run" button).
+2.  **Configure `.env`:** Make sure `API_BASE_URL` and `EXTERNAL_API_KEY` are correctly set in your `.env` file.
+3.  **Run the test:** Open the **Shell** tab and execute:
+    ```bash
+    python api_test.py
+    ```
+4.  **Expected Output:** The script will attempt to create a simple task ("Go to example.com...") and poll for its status. It should print the progress and finish with a "completed" status and the extracted heading from example.com. It exits with code 0 on success and 1 on failure.
+
+This test helps confirm:
+*   The API server is running and accessible.
+*   API key authentication is working.
+*   The basic browser automation task lifecycle (create, run, complete) functions.
+
+## Known Issues ⚠️
+
+*   **Hardcoded Frontend API Key:** Due to an unresolved issue with Vite correctly loading `.env` variables prefixed with `VITE_` within this specific Replit environment, the frontend API key is currently **hardcoded** in `client/src/components/demo-console.tsx`.
+    *   **Action Required:** You **must** manually replace the placeholder key `'93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9'` inside the `fetchApi` and `postApi` functions in that file with the **same secret key** you set for `EXTERNAL_API_KEY` and `VITE_EXTERNAL_API_KEY` in your `.env` file.
+    *   Look for the `// TODO: Fix Vite .env loading and remove hardcoded key` comments.
+    *   Failure to do this will result in authentication errors when using the web UI.
+*   **`RuntimeError: Event loop is closed`:** You may occasionally see this error in the Replit Console logs *after* a browser task completes successfully. This appears related to the cleanup of asynchronous network resources (like those used by `httpx` within underlying libraries) after the background task's event loop has finished. In this template's current configuration, it usually doesn't affect the task's successful execution or results, but indicates imperfect async resource management during shutdown.
