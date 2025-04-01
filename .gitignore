@@ -10,3 +10,8 @@ vite.config.ts.*
 
 # Cache directories
 .cache/
+
+# Logging
+api.log
+
+# Python cache/build files

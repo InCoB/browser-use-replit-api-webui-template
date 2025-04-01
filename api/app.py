@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from .auth import require_api_key
+from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Load environment variables
 load_dotenv()
@@ -20,72 +22,115 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Print the expected API key for debugging
-print(f"API Key expected: {os.environ.get('EXTERNAL_API_KEY')}")
+# --- Logging Configuration START ---
+import logging
+from logging.handlers import RotatingFileHandler
+
+# Disable Flask's default logging handlers
+app.logger.handlers.clear()
+app.logger.propagate = False # Prevent messages from propagating to the root logger
+
+# Determine log level from environment variable (default to INFO)
+log_level_name = os.environ.get("FLASK_LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_name, logging.INFO)
+
+# Create formatter
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Configure file handler
+file_handler = RotatingFileHandler('api.log', maxBytes=1024*1024*5, backupCount=2) # 5MB max size, 2 backups
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(log_level)
+
+# Configure stream handler (console)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(log_formatter)
+stream_handler.setLevel(log_level)
+
+# Add OUR handlers to the Flask app's logger
+app.logger.addHandler(file_handler)
+app.logger.addHandler(stream_handler)
+app.logger.setLevel(log_level)
+
+# Also configure the root logger if needed (e.g., for libraries)
+# logging.basicConfig(level=log_level, handlers=[file_handler, stream_handler])
+
+# Silence Werkzeug's default logger if we are managing logging
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.handlers.clear() # Remove default handler
+werkzeug_logger.propagate = False
+werkzeug_logger.setLevel(logging.WARNING) # Or set level as needed
+# --- Logging Configuration END ---
+
+# Print startup message using the logger
+app.logger.info("Starting Browser Companion API...")
+app.logger.info(f"Environment: {'Replit' if os.environ.get('REPL_ID') else 'Local'}")
+app.logger.info(f"Log Level: {log_level_name}")
 
 # Configure Playwright in Replit environment
-print("Running in Replit environment - configuring for browser automation")
+if os.environ.get('REPL_ID'):
+    app.logger.debug("Replit environment detected, configuring resource limits and Playwright...")
+    # Add ulimit settings to increase file descriptor and process limits
+    try:
+        import resource
+        # Try to increase the file descriptor limit
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+        app.logger.debug(f"File descriptor limit set to {hard}")
+        
+        # Try to increase the process limit
+        soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+        resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
+        app.logger.debug(f"Process limit set to {hard}")
+    except Exception as e:
+        app.logger.warning(f"Could not increase resource limits: {str(e)}")
 
-# Add ulimit settings to increase file descriptor and process limits
-try:
-    import resource
-    # Try to increase the file descriptor limit
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    print(f"Current file descriptor limits: soft={soft}, hard={hard}")
-    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-    
-    # Try to increase the process limit
-    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
-    print(f"Current process limits: soft={soft}, hard={hard}")
-    resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
-    
-    print("Resource limits increased to maximum allowed values")
-except Exception as e:
-    print(f"Could not increase resource limits: {str(e)}")
+    # Configure Playwright environment variables
+    os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
+    os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "1"
+    os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "true"
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict --max-old-space-size=256"
 
-# Configure Playwright to work in Replit environment
-# Keep skip validate requirements, as it's used in the patch
-os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
-# We don't need Playwright to download browsers if we use Nix one exclusively
-os.environ["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "1"
-# Keep skip system deps check
-os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "true"
+    # Add paths to the system libraries
+    library_paths = [
+        "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
+        "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
+        "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
+        "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
+        "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
+        "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
+        "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
+        "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
+        "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
+        "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
+        "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
+        "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
+        "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
+        "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
+        "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
+        "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
+        "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
+    ]
 
-# Set additional environment variables for better compatibility
-os.environ["PYTHONUNBUFFERED"] = "1"  # Ensure Python output is unbuffered
-os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict --max-old-space-size=256"  # Better Node.js error handling with limited memory
+    # Join all library paths and add them to LD_LIBRARY_PATH
+    lib_path_str = ":".join(library_paths)
+    if "LD_LIBRARY_PATH" in os.environ:
+        os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
+    else:
+        os.environ["LD_LIBRARY_PATH"] = lib_path_str
 
-# Add paths to the system libraries
-library_paths = [
-    "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
-    "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
-    "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
-    "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
-    "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
-    "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
-    "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
-    "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
-    "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
-    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
-    "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
-    # Add paths for newly installed dependencies
-    "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
-    "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
-    "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
-    "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
-    "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
-    "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
-]
+    # Configure browser settings
+    os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
+    os.environ["BROWSER_USE_HEADLESS"] = "true"
+    os.environ["BROWSER_USE_BROWSER_ARGS"] = "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-software-rasterizer,--disable-extensions,--single-process,--no-zygote"
+    os.environ["BROWSER_USE_MAX_THREADS"] = "1"
 
-# Join all library paths and add them to LD_LIBRARY_PATH
-lib_path_str = ":".join(library_paths)
-if "LD_LIBRARY_PATH" in os.environ:
-    os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
-else:
-    os.environ["LD_LIBRARY_PATH"] = lib_path_str
+    app.logger.debug("Playwright environment variables configured for Replit.")
+    app.logger.debug(f"LD_LIBRARY_PATH set to: {os.environ.get('LD_LIBRARY_PATH')}")
 
-# Print the library path for debugging
-print(f"LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH')}")
+# Print the expected API key for debugging (only in DEBUG mode)
+app.logger.debug(f"Expected API Key: {os.environ.get('EXTERNAL_API_KEY')}")
 
 # Set environment variables from .env if not already set
 if "PLAYWRIGHT_BROWSERS_PATH" not in os.environ:
@@ -106,55 +151,64 @@ os.environ["BROWSER_USE_BROWSER_ARGS"] = "--no-sandbox,--disable-setuid-sandbox,
 os.environ["BROWSER_USE_MAX_THREADS"] = "1"  # Limit thread usage
 
 # Print browser configuration for debugging
-print(f"Browser configuration: Using Patched NIX Chromium (headless forced)")
+app.logger.info(f"Browser configuration: Using Patched NIX Chromium (headless forced)")
 
 # Keep track of browser tasks
 tasks = {}
 
 def get_model_instance(model_name):
     """Get the appropriate LLM instance based on model name"""
-    # Always try to load and use the real model
     try:
-        # Check if API key is available
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key or api_key == "your_openai_api_key_here":
-            raise ValueError("OpenAI API key not configured. Please set OPENAI_API_KEY in the .env file.")
-        
-        # Import here to allow the rest of the API to work even if this import fails
-        from langchain_openai import ChatOpenAI
-        
-        # Define supported models and their configurations
-        models = {
-            "gpt-4o": ChatOpenAI(model="gpt-4o"),
-            "gpt-4-turbo": ChatOpenAI(model="gpt-4-turbo"),
-            "gpt-4": ChatOpenAI(model="gpt-4"),
-            # gpt-3.5-turbo removed as per requirements
-        }
-        
-        return models.get(model_name, models["gpt-4o"])  # Default to gpt-4o if model not found
+        if model_name.startswith("gemini-"):
+            # Handle Google Gemini Models
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                app.logger.error("Google API key not configured. Please set GOOGLE_API_KEY.")
+                raise ValueError("Google API key not configured.")
+            app.logger.info(f"Initializing Google Gemini model: {model_name}")
+            llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
+            return llm
+        elif model_name.startswith("gpt-"):
+            # Handle OpenAI Models
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key or api_key == "your_openai_api_key_here":
+                app.logger.error("OpenAI API key not configured. Please set OPENAI_API_KEY.")
+                raise ValueError("OpenAI API key not configured.")
+            app.logger.info(f"Initializing OpenAI model: {model_name}")
+            llm = ChatOpenAI(model=model_name, openai_api_key=api_key)
+            return llm
+        else:
+            # Fallback or default model (e.g., default to gpt-4o)
+            app.logger.warning(f"Unknown model prefix for '{model_name}'. Defaulting to gpt-4o.")
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key or api_key == "your_openai_api_key_here":
+                app.logger.error("OpenAI API key not configured for default model.")
+                raise ValueError("OpenAI API key not configured for default model.")
+            llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
+            return llm
+
     except Exception as e:
-        print(f"Error initializing LLM model: {str(e)}")
-        # If LLM fails to load, maybe raise an error or return None?
-        # For now, returning model_name might cause issues later.
-        # Consider raising the exception or handling it more gracefully.
+        app.logger.error(f"Error initializing LLM model '{model_name}': {str(e)}")
         raise ValueError(f"Failed to initialize LLM {model_name}: {e}")
 
 async def run_browser_task(task_id, task_description, model_name):
     """Run a browser task asynchronously using patched Playwright"""
     original_launch = None
+    app.logger.info(f"Starting browser task {task_id}...")
 
     try:
         # Update task status to running
         tasks[task_id]["status"] = "running"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
+        app.logger.info(f"Task {task_id} status set to running.")
         
         # --- Start of browser task logic (no simulation check) ---
-        print(f"Processing task {task_id}: '{task_description}' using model {model_name}")
+        app.logger.debug(f"Processing task {task_id}: '{task_description}' using model {model_name}")
         
         # Check API key
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key or api_key == "your_openai_api_key_here":
-            print(f"No OpenAI API key found for task {task_id}")
+            app.logger.error(f"No OpenAI API key found for task {task_id}")
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["error"] = "OpenAI API key required but not configured."
             tasks[task_id]["updated_at"] = datetime.now().isoformat()
@@ -166,90 +220,88 @@ async def run_browser_task(task_id, task_description, model_name):
             from playwright._impl._browser_type import BrowserType
             import browser_use
             from browser_use import Agent as BrowserAgent, BrowserConfig
-            print(f"Playwright version {getattr(playwright, '__version__', 'unknown')} and browser-use version {getattr(browser_use, '__version__', 'unknown')} found.")
+            app.logger.debug(f"Playwright version {getattr(playwright, '__version__', 'unknown')} and browser-use version {getattr(browser_use, '__version__', 'unknown')} found.")
         except ImportError as e:
-            print(f"Import error for Playwright or browser-use: {e}")
+            app.logger.error(f"Import error for Playwright or browser-use: {e}")
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["error"] = f"Required library not found: {e}"
             tasks[task_id]["updated_at"] = datetime.now().isoformat()
             return
         
         llm = get_model_instance(model_name)
-        print(f"Initializing Agent for task: {task_id}")
+        app.logger.debug(f"Initializing Agent for task: {task_id}")
         browser_error = None
         
         try:
             # Apply the monkey patch
-            print(f"Applying Playwright patch for task {task_id}")
+            app.logger.debug(f"Applying Playwright patch for task {task_id}")
             chromium_path = os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH')
             if not chromium_path or not os.path.exists(chromium_path):
+                app.logger.error(f"NIX Chromium executable not found or path not set: {chromium_path}")
                 raise RuntimeError(f"NIX Chromium executable not found or path not set: {chromium_path}")
 
-                print(f"Using NIX Chromium at path: {chromium_path}")
+            app.logger.debug(f"Using NIX Chromium at path: {chromium_path}")
 
             # Store original launch method if not already stored
             if 'original_launch' not in locals() or original_launch is None:
-                    original_launch = BrowserType.launch
-                    
-                    # Define our patched launch method
-                    def patched_launch(self, **kwargs):
-                        print(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
-                        # Force the executable path to NIX Chromium
-                        kwargs['executablePath'] = chromium_path
-                        # Force headless mode to True
-                        kwargs['headless'] = True
-                        # Ensure env is properly initialized and set skip validation
-                        if 'env' not in kwargs or kwargs['env'] is None:
-                            kwargs['env'] = {}
-                        if isinstance(kwargs['env'], dict):
-                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
-                        # Call the original stored launch method
-                        if original_launch:
-                            return original_launch(self, **kwargs)
-                        else:
-                            raise RuntimeError("Original Playwright launch method not captured.")
-                    
-                    # Apply the patch
-                    BrowserType.launch = patched_launch
-            print("Playwright monkey patch applied successfully for task.")
+                original_launch = BrowserType.launch
+                app.logger.debug("Original Playwright launch method captured.")
+                
+                # Define our patched launch method
+                def patched_launch(self, **kwargs):
+                    app.logger.debug(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
+                    kwargs['executablePath'] = chromium_path
+                    kwargs['headless'] = True
+                    if 'env' not in kwargs or kwargs['env'] is None:
+                        kwargs['env'] = {}
+                    if isinstance(kwargs['env'], dict):
+                        kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                    if original_launch:
+                        return original_launch(self, **kwargs)
+                    else:
+                        app.logger.error("Original Playwright launch method not captured before patching.")
+                        raise RuntimeError("Original Playwright launch method not captured.")
+                
+                # Apply the patch
+                BrowserType.launch = patched_launch
+                app.logger.debug("Playwright monkey patch applied.")
+            else:
+                app.logger.debug("Playwright patch already applied.")
 
             # Configure and run the agent
-            # Check if BrowserConfig is available and Agent supports it
             has_browser_config_param = 'browser_config' in inspect.signature(BrowserAgent.__init__).parameters
             if has_browser_config_param:
-                print("Using BrowserConfig to initialize Agent.")
-                browser_config = BrowserConfig(headless=True) # Patch handles executable path
+                app.logger.debug("Using BrowserConfig to initialize Agent.")
+                browser_config = BrowserConfig(headless=True)
                 agent = BrowserAgent(
                     task=task_description,
                     llm=llm,
                     browser_config=browser_config,
                 )
             else:
-                print("BrowserConfig parameter not found in Agent, using default config.")
+                app.logger.debug("BrowserConfig parameter not found in Agent, using default config.")
                 agent = BrowserAgent(
                     task=task_description,
                     llm=llm,
                 )
             
-            print(f"Running agent for task: {task_id}")
+            app.logger.info(f"Running agent for task: {task_id}")
             result = await agent.run()
             
             # Success! Update task with result
             tasks[task_id]["status"] = "completed"
             tasks[task_id]["result"] = result
             tasks[task_id]["updated_at"] = datetime.now().isoformat()
-            print(f"Task {task_id} completed successfully.")
+            app.logger.info(f"Task {task_id} completed successfully.")
 
         except Exception as error:
             # Capture the error from the browser attempt
             browser_error = str(error)
-            print(f"Browser task {task_id} failed: {browser_error}")
-            traceback.print_exc() # Print detailed traceback for debugging
+            app.logger.error(f"Browser task {task_id} failed: {browser_error}", exc_info=True) # Log with traceback
 
-            # Mark task as failed - removed fallback to simulation
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["error"] = f"Browser automation failed: {browser_error}"
-            tasks[task_id]["result"] = None # Ensure result is None on failure
+            tasks[task_id]["result"] = None
             tasks[task_id]["updated_at"] = datetime.now().isoformat()
 
         finally:
@@ -257,15 +309,14 @@ async def run_browser_task(task_id, task_description, model_name):
              if original_launch:
                  try:
                      BrowserType.launch = original_launch
-                     print(f"Restored original Playwright launch method for task {task_id}.")
-                 except NameError: # If BrowserType wasn't imported due to earlier error
+                     app.logger.debug(f"Restored original Playwright launch method for task {task_id}.")
+                 except NameError:
                      pass
                  except Exception as e:
-                     print(f"Could not restore original launch method: {e}")
+                     app.logger.warning(f"Could not restore original launch method: {e}")
     
     except Exception as e:
-        print(f"General error processing task {task_id}: {str(e)}")
-        traceback.print_exc()
+        app.logger.error(f"General error processing task {task_id}: {str(e)}", exc_info=True)
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = f"Unexpected error: {str(e)}"
         tasks[task_id]["updated_at"] = datetime.now().isoformat()
@@ -280,12 +331,12 @@ def create_browser_task():
         model_name = data.get("model", "gpt-4o")
         
         if not task_description:
+            app.logger.warning("Create task request missing task description.")
             return jsonify({"error": "Task description is required"}), 400
         
-        # Generate a unique task ID
         task_id = str(uuid.uuid4())
+        app.logger.info(f"Creating new task {task_id} for: '{task_description[:50]}...'")
         
-        # Create task entry
         tasks[task_id] = {
             "id": task_id,
             "task": task_description,
@@ -295,95 +346,124 @@ def create_browser_task():
             "updated_at": datetime.now().isoformat(),
         }
         
-        # Run the task directly in the current process without creating new threads
-        # This is to avoid the "failed to create new OS thread" error
-        print(f"Starting task {task_id} directly in the current process")
+        app.logger.debug(f"Starting task {task_id} scheduling...")
         
-        # Use asyncio.create_task to run the browser task asynchronously
-        # This avoids creating a new OS thread while still allowing the request to return
         async def start_task_async():
             loop = asyncio.get_event_loop()
-            # Schedule the task to run in the background
             loop.create_task(run_browser_task(task_id, task_description, model_name))
+            app.logger.debug(f"Task {task_id} scheduled on event loop.")
         
-        # Run the async function to schedule the task
         try:
             asyncio.run(start_task_async())
+        except RuntimeError as e:
+            if "cannot run nested event loops" in str(e).lower():
+                app.logger.warning(f"Nested event loop detected for task {task_id}. Trying ThreadPoolExecutor.")
+                try:
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        executor.submit(lambda: asyncio.run(run_browser_task(task_id, task_description, model_name)))
+                        app.logger.debug(f"Task {task_id} submitted via ThreadPoolExecutor.")
+                except Exception as e2:
+                    app.logger.error(f"Could not run task {task_id} via ThreadPoolExecutor: {str(e2)}", exc_info=True)
+                    tasks[task_id]["status"] = "failed"
+                    tasks[task_id]["error"] = f"Could not start task due to resource limits: {str(e2)}"
+                    tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            else:
+                 app.logger.error(f"Error scheduling task {task_id} with asyncio.run: {str(e)}", exc_info=True)
+                 tasks[task_id]["status"] = "failed"
+                 tasks[task_id]["error"] = f"Could not start task due to asyncio error: {str(e)}"
+                 tasks[task_id]["updated_at"] = datetime.now().isoformat()
         except Exception as e:
-            print(f"Error scheduling task {task_id}: {str(e)}")
-            # If asyncio.run fails, try to run directly as a last resort
-            # This might block the request, but it's better than failing completely
-            try:
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    executor.submit(lambda: asyncio.run(run_browser_task(task_id, task_description, model_name)))
-            except Exception as e2:
-                print(f"Could not run task {task_id} in any way: {str(e2)}")
-                # Update the task status to reflect the failure
-                tasks[task_id]["status"] = "failed"
-                tasks[task_id]["error"] = f"Could not start task due to resource limits: {str(e2)}"
-                tasks[task_id]["updated_at"] = datetime.now().isoformat()
+            app.logger.error(f"Unexpected error scheduling task {task_id}: {str(e)}", exc_info=True)
+            tasks[task_id]["status"] = "failed"
+            tasks[task_id]["error"] = f"Could not start task due to unexpected error: {str(e)}"
+            tasks[task_id]["updated_at"] = datetime.now().isoformat()
         
         return jsonify({
             "id": task_id,
-            "status": "pending",
-            "message": "Task created successfully"
+            "status": tasks[task_id]["status"], # Return the potentially updated status
+            "message": "Task creation initiated."
         }), 201
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error in create_browser_task endpoint: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error during task creation."}), 500
 
 @app.route("/api/browser-tasks", methods=["GET"])
 def list_browser_tasks():
     """List all browser tasks"""
-    return jsonify(list(tasks.values())), 200
+    app.logger.debug("Listing all browser tasks.")
+    # Return a deep copy to avoid modifying the original task data when logging status
+    tasks_list = [json.loads(json.dumps(task, default=str)) for task in tasks.values()] 
+    return jsonify(tasks_list), 200
 
 @app.route("/api/browser-tasks/<task_id>", methods=["GET"])
 @require_api_key
 def get_browser_task(task_id):
-    """Get the status and result of a browser task (requires API key)"""
-    task = tasks.get(task_id)
-    if not task:
+    """Get details of a specific browser task"""
+    app.logger.debug(f"Request received for task details: {task_id}")
+    if task_id not in tasks:
+        app.logger.warning(f"Task not found: {task_id}")
         return jsonify({"error": "Task not found"}), 404
-    
+        
+    task = tasks[task_id]
+    # Log task status only if it has changed since last logged (or if never logged)
+    last_logged = task.get("_last_logged_status")
+    current_status = task["status"]
+    if last_logged != current_status:
+        app.logger.info(f"Task {task_id} status: {current_status}")
+        # Update the internal tracking variable
+        tasks[task_id]["_last_logged_status"] = current_status 
+        
     # Create a JSON-serializable copy of the task data
     # Specifically handle the 'result' field which might contain non-serializable objects
-    serializable_task = {}
+    response_task = {}
     for key, value in task.items():
         if key == 'result':
-            # Try to extract a simple text result if possible
-            # Adjust this based on the actual structure of browser-use results
+            # Try to extract a simple text result if possible (adjust as needed)
             if isinstance(value, dict) and 'text' in value:
-                serializable_task[key] = value['text'] 
+                response_task[key] = value['text'] 
             elif isinstance(value, str):
-                 serializable_task[key] = value
+                 response_task[key] = value
             elif value is not None:
-                # Fallback: Convert potentially complex object to string representation
-                # This might not be ideal JSON, but prevents the TypeError
-                serializable_task[key] = str(value) 
+                # Fallback: Convert complex object to string representation
+                app.logger.debug(f"Converting non-serializable result for task {task_id} to string.")
+                response_task[key] = str(value) 
             else:
-                 serializable_task[key] = None
-        else:
-            # Assume other fields (id, status, timestamps, etc.) are serializable
-            serializable_task[key] = value
+                 response_task[key] = None
+        elif key != "_last_logged_status": # Exclude internal tracking field
+            # Assume other fields are serializable
+            response_task[key] = value
 
-    return jsonify(serializable_task), 200
+    # Add detailed debugging right before jsonify
+    app.logger.debug(f"[DEBUG] Type of response_task['result'] before jsonify: {type(response_task.get('result'))}")
+    try:
+        app.logger.debug(f"[DEBUG] Content of response_task before jsonify: {json.dumps(response_task, indent=2, default=str)}") # Try to dump with str fallback
+    except Exception as dump_error:
+        app.logger.debug(f"[DEBUG] Could not dump response_task, content: {response_task}")
+
+    return jsonify(response_task)
 
 @app.route("/api/supported-models", methods=["GET"])
 def get_supported_models():
     """Get list of supported LLM models"""
+    app.logger.debug("Fetching list of supported models.")
     models = [
+        # OpenAI Models
         {"id": "gpt-4o", "name": "GPT-4o"},
         {"id": "gpt-4-turbo", "name": "GPT-4 Turbo"},
         {"id": "gpt-4", "name": "GPT-4"},
-        # gpt-3.5-turbo removed as per requirements
+        # Google Models
+        {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"},
+        {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash-Lite"},
+        {"id": "gemini-1.5-flash-latest", "name": "Gemini 1.5 Flash"},
     ]
+    models.sort(key=lambda x: x['name'])
     return jsonify(models), 200
 
 def get_system_resources():
     """Get available system resources"""
     try:
-        import os
         import psutil
         
         # Get memory stats
@@ -424,30 +504,28 @@ def get_system_resources():
             }
         }
     except Exception as e:
+        app.logger.warning(f"Could not collect system resources: {str(e)}")
         return {"error": f"Could not collect system resources: {str(e)}"}
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
+    app.logger.info("Performing health check...")
     nix_chromium_working = False
     nix_chromium_output = "Test not run or failed."
     nix_chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
-    original_launch = None # Local scope for health check patch
+    original_launch = None
 
-    # Test NIX Chromium using the reliable patch
     if nix_chromium_path and os.path.exists(nix_chromium_path):
         try:
-            print(f"Health Check: Testing NIX Chromium at {nix_chromium_path}")
-            # Apply the same robust patch used in tasks
+            app.logger.debug(f"Health Check: Testing NIX Chromium at {nix_chromium_path}")
             from playwright.sync_api import sync_playwright
             from playwright._impl._browser_type import BrowserType
             
-            # Store original launch method
             original_launch = BrowserType.launch
             
-            # Define our patched launch method for health check
             def health_patched_launch(self, **kwargs):
-                print(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
+                app.logger.debug(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
                 kwargs['executablePath'] = nix_chromium_path
                 kwargs['headless'] = True
                 if 'env' not in kwargs or kwargs['env'] is None:
@@ -457,15 +535,14 @@ def health_check():
                 if original_launch:
                     return original_launch(self, **kwargs)
                 else:
+                    app.logger.error("Health Check: Original launch method not captured.")
                     raise RuntimeError("Health Check: Original launch method not captured.")
             
-            # Apply the patch
             BrowserType.launch = health_patched_launch
-            print("Health check: Playwright monkey patch applied.")
+            app.logger.debug("Health check: Playwright monkey patch applied.")
             
-            # Run a quick test with monkey-patched Playwright
             with sync_playwright() as p:
-                browser = p.chromium.launch() # Patch handles args
+                browser = p.chromium.launch() 
                 version = browser.version
                 page = browser.new_page()
                 page.goto("http://example.com")
@@ -474,28 +551,25 @@ def health_check():
                 browser.close()
                 nix_chromium_working = True
                 nix_chromium_output = f"Version: {version}. Successfully loaded '{title}' page."
-                print("Health Check: NIX Chromium test successful.")
+                app.logger.info("Health Check: NIX Chromium test successful.")
                     
         except Exception as e:
             nix_chromium_working = False
             nix_chromium_output = f"NIX Chromium test failed: {str(e)}"
-            print(f"Health Check: NIX Chromium test failed: {e}")
-            # traceback.print_exc() # Optional: print traceback for health check failures
+            app.logger.error(f"Health Check: NIX Chromium test failed: {e}", exc_info=True)
 
         finally:
-            # Restore the original method after health check test
-             if original_launch:
+            if original_launch:
                  try:
                      BrowserType.launch = original_launch
-                     print("Health Check: Restored original Playwright launch method.")
+                     app.logger.debug("Health Check: Restored original Playwright launch method.")
                  except Exception as e:
-                     print(f"Health Check: Failed to restore original launch method: {e}")
+                     app.logger.warning(f"Health Check: Failed to restore original launch method: {e}")
 
     else:
         nix_chromium_output = f"NIX Chromium path not set or invalid: {nix_chromium_path}"
-        print(f"Health Check: {nix_chromium_output}")
+        app.logger.warning(f"Health Check: {nix_chromium_output}")
 
-    
     health_data = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -520,8 +594,10 @@ def health_check():
         import psutil
         health_data["system_resources"] = get_system_resources()
     except ImportError:
+        app.logger.warning("psutil not installed, cannot report system resources.")
         health_data["system_resources"] = {"error": "psutil not installed"}
     except Exception as e:
+        app.logger.error(f"Error getting system resources: {str(e)}", exc_info=True)
         health_data["system_resources"] = {"error": f"Error getting system resources: {str(e)}"}
     
     # Check OpenAI API key
@@ -562,6 +638,7 @@ def health_check():
             "status": "installed",
             "version": getattr(playwright, "__version__", "unknown")
         }
+        app.logger.debug("Playwright is installed.")
         
         # Try to check browsers installation
         try:
@@ -572,10 +649,13 @@ def health_check():
                     "firefox": "available" if hasattr(p, "firefox") else "missing",
                     "webkit": "available" if hasattr(p, "webkit") else "missing"
                 }
+                app.logger.debug("Playwright browsers checked.")
         except Exception as browser_error:
+            app.logger.warning(f"Error checking Playwright browsers: {browser_error}")
             health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
             
     except ImportError as import_error:
+        app.logger.warning(f"Playwright not installed: {import_error}")
         health_data["environment"]["playwright"] = {
             "status": "missing",
             "error": str(import_error)
@@ -587,6 +667,7 @@ def health_check():
             "status": "installed",
             "version": getattr(browser_use, "__version__", "unknown")
         }
+        app.logger.debug("browser-use is installed.")
         
         # Check browser_use Agent constructor parameters
         try:
@@ -597,9 +678,12 @@ def health_check():
             if 'self' in param_names:
                 param_names.remove('self')
             health_data["environment"]["browser_use"]["supported_params"] = param_names
+            app.logger.debug(f"browser_use Agent params: {param_names}")
         except Exception as param_error:
+            app.logger.warning(f"Error checking browser_use params: {param_error}")
             health_data["environment"]["browser_use"]["param_error"] = str(param_error)
     except ImportError as import_error:
+        app.logger.warning(f"browser-use not installed: {import_error}")
         health_data["environment"]["browser_use"] = {
             "status": "missing",
             "error": str(import_error)
@@ -615,10 +699,11 @@ def health_check():
             else:
                 system_deps[lib] = "not found in ldconfig"
         except Exception as e:
+            app.logger.warning(f"System dependency check failed for {lib}: {e}")
             system_deps[lib] = f"check failed: {str(e)}"
-    
     health_data["environment"]["system_dependencies"] = system_deps
-    
+    app.logger.debug(f"System dependencies check: {system_deps}")
+
     # Update overall status check (remove simulation mode condition)
     api_key_ok = health_data["environment"]["openai_api_key"] == "available"
     playwright_ok = health_data["environment"].get("playwright", {}).get("status") == "installed"
@@ -635,7 +720,10 @@ def health_check():
             health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
         # Note for nix chromium failure already added above
         
+    app.logger.info(f"Health check completed. Status: {health_data['status']}")
     return jsonify(health_data), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    # Use Flask's default run for development, which handles reloading.
+    # Logging is configured above using app.logger.
+    app.run(host="0.0.0.0", port=5001, debug=os.environ.get("FLASK_ENV") == "development")

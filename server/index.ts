@@ -18,18 +18,26 @@ app.use((req, res, next) => {
   };
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+    // Only perform detailed API logging if SERVER_LOG_LEVEL is DEBUG
+    if (process.env.SERVER_LOG_LEVEL?.toUpperCase() === "DEBUG") {
+      const duration = Date.now() - start;
+      const isTaskStatusPoll = req.method === 'GET' && path.startsWith('/api/browser-tasks/') && path.length > '/api/browser-tasks/'.length;
+      const isNotModified = res.statusCode === 304;
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
+      // Log if it starts with /api, unless it's a non-modified task status poll
+      if (path.startsWith("/api") && !(isTaskStatusPoll && isNotModified)) {
+        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+        // Only add JSON response body if it's not a 304
+        if (capturedJsonResponse && !isNotModified) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
 
-      log(logLine);
+        if (logLine.length > 80) {
+          logLine = logLine.slice(0, 79) + "…";
+        }
+
+        log(logLine);
+      }
     }
   });
 
