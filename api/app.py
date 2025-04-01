@@ -451,12 +451,12 @@ def get_supported_models():
     models = [
         # OpenAI Models
         {"id": "gpt-4o", "name": "GPT-4o"},
-        {"id": "gpt-4-turbo", "name": "GPT-4 Turbo"},
-        {"id": "gpt-4", "name": "GPT-4"},
+       
+
         # Google Models
         {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"},
         {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash-Lite"},
-        {"id": "gemini-1.5-flash-latest", "name": "Gemini 1.5 Flash"},
+        
     ]
     models.sort(key=lambda x: x['name'])
     return jsonify(models), 200

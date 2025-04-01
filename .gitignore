@@ -15,5 +15,15 @@ vite.config.ts.*
 api.log
 logs
 agent_output.json
+*.log
 
 # Python cache/build files
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pythonlibs/
+
+# Session state (if used)
+# session_cookies.json
+# *.json
+.bak

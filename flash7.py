@@ -142,11 +142,15 @@ if AGENT_CLASS_AVAILABLE:
             state = None; model_output = None; result: list[ActionResult] = []; step_start_time = time.time(); tokens = 0; correction_triggered_this_step = False; run_planner_now = False
             try: # Outer try
                 state = await self.browser_context.get_state(); active_page = await self.browser_context.get_current_page()
+                # Corrected memory check
                 if hasattr(self,'memory') and self.memory and hasattr(self.memory, 'settings') and hasattr(self.memory.settings, 'interval') and self.state.n_steps % self.memory.settings.interval == 0:
                      if hasattr(self.memory, 'create_procedural_memory') and callable(getattr(self.memory, 'create_procedural_memory')): self.memory.create_procedural_memory(self.state.n_steps)
                 await self._raise_if_stopped_or_paused();
+                # Corrected method call
                 if hasattr(Agent, '_update_action_models_for_page'): await Agent._update_action_models_for_page(self, active_page)
+                else: logger.warning("'_update_action_models_for_page' not found on Agent, skipping.")
                 self._message_manager.add_state_message(state, self.state.last_result, step_info, self.settings.use_vision)
+                # Standard Planner Call (uses patch)
                 if self.settings.planner_llm and self.state.n_steps % self.settings.planner_interval == 0:
                      run_planner_now = True; logger.info(f"Triggering planner interval")
                      if hasattr(self, '_run_planner') and callable(getattr(self, '_run_planner')): plan = await self._run_planner(); # Calls PATCHED
@@ -230,7 +234,7 @@ async def execute_javascript_action(code: str, browser: Browser) -> ActionResult
         patch_logger.info(f"JS Execution successful. Result: {extracted_content}")
     except Exception as e: error_str = f"Error executing JavaScript: {type(e).__name__}: {e}"; patch_logger.error(error_str); return ActionResult(error=error_str, result_details={"js_code": code})
     return ActionResult(extracted_content=result_str, result_details={"js_code": code, "js_output": extracted_content})
-class IframeContentParams(BaseModel):
+class IframeContentParams(BaseModel): # Needs BaseModel from pydantic
     iframe_selector: str = Field(..., description="CSS selector for the iframe element.")
     extract_text: bool = Field(default=True, description="True for text content, False for inner HTML.")
 @controller.action('Extracts content from within a specified iframe.', param_model=IframeContentParams)
@@ -341,22 +345,26 @@ try:
 
     # --- Helper function to format history for chat context ---
     # (Keep identical helper function logic from v22)
-    def format_history_for_chat(history: Optional[AgentHistoryList], max_steps: Optional[int] = None) -> str: # Added Optional type hint
+    def format_history_for_chat(history: Optional[AgentHistoryList], max_steps: Optional[int] = None) -> str:
         if not history or not history.history: return "No history available."
         history_summary_lines = ["Agent Run Summary:"]
         steps_to_include = history.history
         if max_steps is not None and len(steps_to_include) > max_steps: steps_to_include = steps_to_include[-max_steps:] ; history_summary_lines.append(f"(Showing last {max_steps} steps)")
-        else: history_summary_lines.append("(Showing ALL steps)")
+        else: history_summary_lines.append("(Showing ALL steps)") # Corrected indentation
         for i, step in enumerate(steps_to_include):
             step_num = step.metadata.step_number if step.metadata else f"Unknown (Index {i})" ; goal = "N/A" ; action_summary = "N/A" ; result_summary = "N/A"
             if step.model_output and step.model_output.current_state: goal = getattr(step.model_output.current_state, 'next_goal', 'N/A')
             if step.model_output and step.model_output.action:
-                 first_action = step.model_output.action[0]; action_name = list(first_action.model_dump(exclude_unset=True).keys())[0] # Get action name
-                 params = first_action.model_dump(exclude_unset=True).get(action_name, {})
-                 primary_param_val = params.get('selector') or params.get('query') or params.get('text') or params.get('code') or params.get('url') or ""
-                 if primary_param_val and isinstance(primary_param_val, str) and len(primary_param_val) > 50: primary_param_val = primary_param_val[:47] + "..."
-                 action_summary = f"{action_name}({primary_param_val})" if primary_param_val else f"{action_name}()"
-                 if len(step.model_output.action) > 1: action_summary += "..."
+                 # Safer way to get action name and params
+                 try:
+                     first_action_dump = step.model_output.action[0].model_dump(exclude_unset=True)
+                     action_name = list(first_action_dump.keys())[0]
+                     params = first_action_dump.get(action_name, {})
+                     primary_param_val = params.get('selector') or params.get('query') or params.get('text') or params.get('code') or params.get('url') or ""
+                     if primary_param_val and isinstance(primary_param_val, str) and len(primary_param_val) > 50: primary_param_val = primary_param_val[:47] + "..."
+                     action_summary = f"{action_name}({primary_param_val})" if primary_param_val else f"{action_name}()"
+                     if len(step.model_output.action) > 1: action_summary += "..."
+                 except Exception: action_summary = "Error parsing action" # Handle potential errors getting action details
             if step.result:
                  first_result = step.result[0]
                  if first_result.error: result_summary = f"Error: {first_result.error[:100]}{'...' if len(first_result.error) > 100 else ''}"
@@ -372,45 +380,30 @@ try:
         print("Running browser-use agent...")
         max_steps_to_run = 150
         print(f"Running agent for maximum {max_steps_to_run} steps...")
-        history = None # Initialize history
-        final_agent_report = "Agent run did not complete successfully." # Default report
-        steps_taken = 0
-        agent_state = None # To store final state if possible
+        history = None ; final_agent_report = "Agent run did not complete successfully."; steps_taken = 0; agent_state = None
         try:
              history = await agent.run(max_steps=max_steps_to_run)
              final_agent_report = history.final_result() if history else "Agent run finished, but no history object returned."
-             if hasattr(agent,'state'): agent_state = agent.state # Capture state if available
+             if hasattr(agent,'state'): agent_state = agent.state
         except Exception as run_err:
-             print(f"\n--- ERROR DURING AGENT RUN ---")
-             print(traceback.format_exc())
-             print(f"----------------------------")
+             print(f"\n--- ERROR DURING AGENT RUN ---"); print(traceback.format_exc()); print(f"----------------------------")
              final_agent_report = f"Agent run failed with exception: {run_err}"
-             # History might be partial or None
-             if history is None and hasattr(agent,'state') and hasattr(agent.state,'history'):
-                  history = agent.state.history # Try to get partial history from state
-
-        # Ensure history is at least an empty list if None
-        if history is None:
-            history = AgentHistoryList(history=[]) # Create empty history list
+             if history is None and hasattr(agent,'state') and hasattr(agent.state,'history'): history = agent.state.history
+        if history is None: history = AgentHistoryList(history=[]) # Ensure history is iterable
 
         # --- CHAT LOOP ---
-        print("\n--------------------")
-        print("Agent run finished.")
+        print("\n--------------------"); print("Agent run finished.")
         task_successful = history.is_successful() if hasattr(history, 'is_successful') else False
         print(f"Agent task finished {'successfully' if task_successful else 'unsuccessfully'}.")
-        print("Starting interactive chat with the LLM...")
-        print("Type 'quit' or 'exit' to end chat.")
-        print("--------------------")
-
+        print("Starting interactive chat with the LLM..."); print("Type 'quit' or 'exit' to end chat."); print("--------------------")
         chat_history = []
         chat_history.append(SystemMessage(content="You are the LLM that just controlled a browser agent. The user wants to chat with you about the completed task."))
-        if 'online_editor_vision_task' in locals(): chat_history.append(SystemMessage(content=f"Original task:\n---\n{online_editor_vision_task}\n---"))
+        if 'online_editor_vision_task' in locals(): print("(Context: Including original task prompt)"); chat_history.append(SystemMessage(content=f"Original task:\n---\n{online_editor_vision_task}\n---"))
         formatted_history_summary = format_history_for_chat(history, max_steps=None) # Include ALL steps
         if formatted_history_summary != "No history available.":
             print(f"(Context: Including summary of {history.number_of_steps()} steps)")
             chat_history.append(SystemMessage(content=formatted_history_summary))
-        # Add Memory Context
-        agent_memory_summary = None
+        agent_memory_summary = None # Extract memory
         if AGENT_CLASS_AVAILABLE and hasattr(agent, '_message_manager') and hasattr(agent._message_manager, 'state') and hasattr(agent._message_manager.state, 'history'):
              try:
                   if 'ManagedMessage' in globals():
@@ -418,7 +411,7 @@ try:
                        if memory_messages: agent_memory_summary = memory_messages[-1]; print("(Context: Including last procedural memory summary)") ; chat_history.append(AIMessage(content=f"My last internal summary was: {agent_memory_summary}"))
              except Exception as mem_e: print(f"(Debug: Could not extract memory summary - {mem_e})")
         if final_agent_report: chat_history.append(AIMessage(content=f"Agent's final report/result was: {final_agent_report}"))
-
+        # Start chat
         while True:
             try:
                 user_input = input("You: ")
@@ -428,4 +421,52 @@ try:
                 full_response = ""; print("AI: ", end="", flush=True)
                 if hasattr(main_llm, 'astream'):
                     async for chunk in main_llm.astream(chat_history): content_chunk = chunk.content; print(content_chunk, end="", flush=True); full_response += content_chunk
-                else: response = await main_llm.ain
+                else: response = await main_llm.ainvoke(chat_history); full_response = response.content; print(full_response, end="")
+                print()
+                chat_history.append(AIMessage(content=full_response))
+            except EOFError: print("\nExiting chat."); break
+            except Exception as chat_err: print(f"\nError during chat: {chat_err}")
+        # --- END CHAT LOOP ---
+
+        print("\nAgent Run Analysis:")
+        steps_taken = agent_state.n_steps -1 if agent_state else len(history.history) # Use agent_state if available
+        print(f"Agent ran for {steps_taken} steps.")
+        print("Visited URLs:", history.urls() if history else "N/A")
+        print("Final result type:", type(final_agent_report))
+        if final_agent_report is not None: print("Final result:", final_agent_report)
+        else: print("Final result: None")
+        save_to_file(final_agent_report, filename="agent_output.json")
+
+    if 'asyncio' not in sys.modules: print("ERROR: asyncio module not imported!"); sys.exit(1)
+    asyncio.run(run_agent())
+    print("\nScript finished.")
+
+except ImportError as e: print(f"ImportError during browser-use test: {e}")
+except ValueError as e: print(f"ValueError during browser-use test: {e}")
+except Exception as e:
+    print(f"Error running browser-use test: {e}")
+    print(f"Detailed error for browser-use test:")
+    print(f"{traceback.format_exc()}")
+# === End of browser-use Test Section ===
+
+# --- Restore Patches ---
+# (Keep identical restore logic)
+if AGENT_CLASS_AVAILABLE:
+    target_method_name_planner = "_run_planner"; target_method_name_step = "step"; target_method_name_init = "__init__"
+    if original_agent_run_planner and hasattr(Agent, target_method_name_planner):
+        try: setattr(Agent, target_method_name_planner, original_agent_run_planner)
+        except Exception as e: print(f"\nFailed to restore Agent patch ({target_method_name_planner}): {e}")
+        else: print(f"\nRestored original Agent method: {target_method_name_planner}")
+    if original_agent_step and hasattr(Agent, target_method_name_step):
+        try: setattr(Agent, target_method_name_step, original_agent_step)
+        except Exception as e: print(f"\nFailed to restore Agent patch ({target_method_name_step}): {e}")
+        else: print(f"Restored original Agent method: {target_method_name_step}")
+    if original_agent_init and hasattr(Agent, target_method_name_init):
+         try: setattr(Agent, target_method_name_init, original_agent_init)
+         except Exception as e: print(f"\nFailed to restore Agent patch (__init__): {e}")
+         else: print(f"Restored original Agent method: {target_method_name_init}")
+if original_playwright_launch:
+    try: BrowserType.launch = original_playwright_launch
+    except Exception as e: print(f"\nFailed to restore Playwright launch method: {e}")
+    else: print("Restored original Playwright launch method.")
+# --- End Restore Patches ---

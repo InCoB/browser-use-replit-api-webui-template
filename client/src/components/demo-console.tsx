@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 // Enhanced fetch function with better error handling
 async function fetchApi(url: string) {
   // Hardcoded API key that matches what the Flask API expects
+  // TODO: Fix Vite .env loading and remove hardcoded key
   const apiKey = '93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9';
   
   try {
@@ -52,6 +53,7 @@ async function fetchApi(url: string) {
 // Enhanced post function with better error handling
 async function postApi(url: string, data: any) {
   // Hardcoded API key that matches what the Flask API expects
+  // TODO: Fix Vite .env loading and remove hardcoded key
   const apiKey = '93ecb5a7-64f6-4d3c-9ba1-f5ca5eadc1f9';
   
   try {
@@ -129,21 +131,20 @@ interface ApiResponse<T> {
 }
 
 export function DemoConsole() {
-  const [task, setTask] = useState('Go to Reddit, search for \'browser-use\', click on the first post and return the first comment.');
+  const [task, setTask] = useState('Go to google, search for \'browser-use\', click on the first post and return the first link.');
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [browserPreview, setBrowserPreview] = useState<string | null>(null);
   const { toast } = useToast();
   // Store the task result
   const [results, setResults] = useState<string | null>(null);
   
-  // Default models in case API fails
+  // Default model in case API fails
   const defaultModels: LlmModel[] = [
     { id: 'gpt-4o', name: 'GPT-4o' },
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-    { id: 'gpt-4', name: 'GPT-4' }
+   
   ];
   
-  // Fetch supported models from the API
+  // Fetch supported models from the API (still useful if API lists more)
   const { data: models = defaultModels } = useQuery({
     queryKey: ['/api/supported-models'],
     queryFn: async ({ queryKey }) => {
@@ -158,14 +159,14 @@ export function DemoConsole() {
     }
   });
   
-  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o'); // Default to gpt-4o
   
-  // Set default model when models are loaded
+  // Set default model when models are loaded (redundant now, but harmless)
   useEffect(() => {
     if (models.length > 0 && !selectedModel) {
       setSelectedModel(models[0].id);
     }
-  }, [models]);
+  }, [models, selectedModel]); // Added selectedModel dependency
   
   // Create a new browser task
   const createTaskMutation = useMutation({
