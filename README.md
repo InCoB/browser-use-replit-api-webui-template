@@ -6,14 +6,18 @@ A brief description of your project.
 
 1.  **Environment:** This project uses Poetry for Python dependency management within a Replit environment configured via Nix. The Node.js frontend/proxy and Python Flask backend are run concurrently.
 
-2.  **Installation (Important: Manual Steps Required):**
-    *   **Open the Shell tab.**
-    *   When reloading the shell or environment, if prompted "Install Replit's Python tools [y/n]", press **'n' (no)**. This project uses Poetry to manage dependencies, and allowing Replit's tools to manage them simultaneously can cause conflicts.
-    *   Run `poetry install` in the Shell tab. This installs Python dependencies (including `langchain-openai`, `langchain-google-genai`, `browser-use`, etc.) into the local `.pythonlibs` directory, based on `poetry.lock`.
-    *   Run `npm install` in the Shell tab to install Node.js dependencies into `node_modules`.
-    *   *(Note: The Replit "Run" button's automatic installation has been disabled in `.replit` due to previous issues. Manual installation via the Shell is required.)*
+2.  **Nix Environment Dependencies (Important):**
+    *   System-level dependencies, including the core Python interpreter and specific Python packages available through Nix (like `psutil`, `black`), **must** be added to the `deps` list within the `replit.nix` file.
+    *   After modifying `replit.nix`, you **must** rebuild the environment by running `kill 1` in the **Shell** tab. Poetry cannot install packages that are intended to be provided by the Nix environment.
 
-3.  **Environment Variables:**
+3.  **Installation (Manual Steps Required):**
+    *   **Open the Shell tab.**
+    *   When reloading the shell or environment, if prompted "Install Replit's Python tools [y/n]", press **'n' (no)**.
+    *   Run `poetry install`. This installs Python dependencies listed in `pyproject.toml` (like `langchain-openai`, `langchain-google-genai`, `browser-use`, etc.) into the local `.pythonlibs` directory using the Python interpreter provided by Nix.
+    *   Run `npm install` to install Node.js dependencies.
+    *   *(Note: The Replit \"Run\" button's automatic installation has been disabled in `.replit`.)*
+
+4.  **Environment Variables:**
     *   Copy `.env.example` to `.env`.
     *   Fill in your `OPENAI_API_KEY` (required for OpenAI models and default fallback).
     *   Fill in your `GOOGLE_API_KEY` (required if using Gemini models).
@@ -22,7 +26,7 @@ A brief description of your project.
         *   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.**
     *   Verify the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` is correct for your Replit environment (run `which chromium | cat` in the shell if needed).
 
-4.  **Running:** 
+5.  **Running:** 
     *   Click the **"Run" button** in the Replit UI.
     *   This now executes the `dev` script defined in `package.json`.
     *   The `dev` script uses `concurrently` to start all three services:
@@ -77,7 +81,7 @@ The Python API (`api/app.py`) uses Python's standard `logging` module.
 A simple Python script `api_test.py` is included to verify basic API functionality.
 
 1.  **Ensure the main application is running** (click the "Run" button).
-2.  **Configure `.env`:** Make sure `API_BASE_URL` and `EXTERNAL_API_KEY` are correctly set in your `.env` file.
+2.  **Configure `.env**:** Make sure `API_BASE_URL` and `EXTERNAL_API_KEY` are correctly set in your `.env` file.
 3.  **Run the test:** Open the **Shell** tab and execute:
     ```bash
     python api_test.py

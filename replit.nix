@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.black
     pkgs.playwright-driver
     pkgs.glibc
     pkgs.glib
@@ -34,5 +35,7 @@
     pkgs.gtk3
     pkgs.chromium
     pkgs.gitFull
+    pkgs.python311Packages.psutil
+    pkgs.python311Packages.black
   ];
 }
