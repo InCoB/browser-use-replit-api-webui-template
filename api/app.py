@@ -14,6 +14,7 @@ from flask_cors import CORS
 from .auth import require_api_key
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from .health_check_logic import perform_detailed_diagnostics
 
 # Load environment variables
 load_dotenv()
@@ -91,34 +92,6 @@ except Exception as e:
     os.environ["PLAYWRIGHT_CHROMIUM_SKIP_SYSTEM_DEPS"] = "true"
     os.environ["PYTHONUNBUFFERED"] = "1"
     os.environ["NODE_OPTIONS"] = "--unhandled-rejections=strict --max-old-space-size=256"
-
-# Add paths to the system libraries
-library_paths = [
-    "/nix/store/5gn1p7qbij0i7lbj9xdvpz1rrngxiydw-xorg-libxcb-1.17.0/lib",
-    "/nix/store/3jfj4q2w92kkd2dff9p9bj22b0f1ibdc-libxkbcommon-1.6.0/lib",
-    "/nix/store/byjgb9md2gk4a9hfsflnlmn7g6wddmdc-libdrm-2.4.120/lib",
-    "/nix/store/v0jmnz5ssrxlm4l6ci80yaqgpi3wc87z-libXrandr-1.5.4/lib",
-    "/nix/store/k65rj40r9kg7vci0c9irhg8b2n4frga8-libXcomposite-0.4.6/lib",
-    "/nix/store/hhxfpbs54w1mmgzsncbs4yh9gvld6yls-libXdamage-1.1.6/lib",
-    "/nix/store/4xm83ky7gvq9h5gzl5ylj1s3b1r38wj9-libXfixes-6.0.1/lib",
-    "/nix/store/rvcg06hzzxzq2ks2ag9jffjlc1m3zc09-libXrender-0.9.11/lib",
-    "/nix/store/jgxvbid3i7z7qiw55r5qwpgcfpchvkhb-libXtst-1.2.4/lib",
-    "/nix/store/d1jplxanpq0g2k9s0jgrks11a9hlj2r2-libXi-1.8.1/lib",
-    "/nix/store/wkdvprbvp7gg2qcvr1mlj3ndlk2p9b9b-pango-1.50.14/lib",
-    "/nix/store/yfrfsxp44ln4lywhzlfj3gkndmdvhl52-glib-2.78.3/lib",
-    "/nix/store/irkif55f313pzgs5n6dpqxx9hk2q5y57-nss-3.95/lib",
-    "/nix/store/f1z5vnsw4r6yz13a7q2xi4sjps41pn6m-alsa-lib-1.2.10/lib",
-    "/nix/store/6rrk0i1qxs5sq9jl1ycys3h6r3f4d8sl-at-spi2-atk-2.46.0/lib",
-    "/nix/store/4wkwv40iqxnmkw25y618qdqmwcbpi4z3-cups-2.4.7/lib",
-    "/nix/store/mpy304iwc2fk1n4n5x4cfmvss2xmvny0-dbus-1.14.10/lib"
-]
-
-# Join all library paths and add them to LD_LIBRARY_PATH
-lib_path_str = ":".join(library_paths)
-if "LD_LIBRARY_PATH" in os.environ:
-    os.environ["LD_LIBRARY_PATH"] = f"{lib_path_str}:{os.environ['LD_LIBRARY_PATH']}"
-else:
-    os.environ["LD_LIBRARY_PATH"] = lib_path_str
 
     # Configure browser settings
     os.environ["BROWSER_USE_BROWSER_TYPE"] = "chromium"
@@ -465,267 +438,24 @@ def get_supported_models():
     models.sort(key=lambda x: x['name'])
     return jsonify(models), 200
 
-def get_system_resources():
-    """Get available system resources"""
-    try:
-        import psutil
-        
-        # Get memory stats
-        mem = psutil.virtual_memory()
-        
-        # Get CPU usage
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        
-        # Get process info
-        process = psutil.Process(os.getpid())
-        process_mem = process.memory_info()
-        
-        # Get open file count
-        try:
-            open_files = len(process.open_files())
-        except:
-            open_files = -1
-            
-        # Get thread count
-        try:
-            thread_count = len(process.threads())
-        except:
-            thread_count = -1
-            
-        return {
-            "memory": {
-                "total": mem.total,
-                "available": mem.available,
-                "used": mem.used,
-                "percent": mem.percent
-            },
-            "cpu_percent": cpu_percent,
-            "process": {
-                "memory_used": process_mem.rss,
-                "memory_percent": process.memory_percent(),
-                "open_files": open_files,
-                "thread_count": thread_count
-            }
-        }
-    except Exception as e:
-        app.logger.warning(f"Could not collect system resources: {str(e)}")
-        return {"error": f"Could not collect system resources: {str(e)}"}
-
-@app.route("/api/health", methods=["GET"])
+# Simplified Health Check Endpoint
+@app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint"""
-    app.logger.info("Performing health check...")
-    nix_chromium_working = False
-    nix_chromium_output = "Test not run or failed."
-    nix_chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
-    original_launch = None
+    """Basic health check endpoint. Returns simple status."""
+    app.logger.debug("Basic health check endpoint called.")
+    return jsonify({"status": "healthy"}), 200
 
-    if nix_chromium_path and os.path.exists(nix_chromium_path):
-        try:
-            app.logger.debug(f"Health Check: Testing NIX Chromium at {nix_chromium_path}")
-                    from playwright.sync_api import sync_playwright
-                    from playwright._impl._browser_type import BrowserType
-                    
-                    original_launch = BrowserType.launch
-                    
-            def health_patched_launch(self, **kwargs):
-                app.logger.debug(f"Health Check: Patched launch forcing executablePath={nix_chromium_path} and headless=True")
-                kwargs['executablePath'] = nix_chromium_path
-                kwargs['headless'] = True
-                        if 'env' not in kwargs or kwargs['env'] is None:
-                            kwargs['env'] = {}
-                        if isinstance(kwargs['env'], dict):
-                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
-                if original_launch:
-                        return original_launch(self, **kwargs)
-                else:
-                    app.logger.error("Health Check: Original launch method not captured.")
-                    raise RuntimeError("Health Check: Original launch method not captured.")
-                    
-            BrowserType.launch = health_patched_launch
-            app.logger.debug("Health check: Playwright monkey patch applied.")
-                    
-                    with sync_playwright() as p:
-                browser = p.chromium.launch() 
-                version = browser.version
-                        page = browser.new_page()
-                        page.goto("http://example.com")
-                        title = page.title()
-                        page.close()
-                        browser.close()
-                        nix_chromium_working = True
-                nix_chromium_output = f"Version: {version}. Successfully loaded '{title}' page."
-                app.logger.info("Health Check: NIX Chromium test successful.")
-                    
-        except Exception as e:
-            nix_chromium_working = False
-            nix_chromium_output = f"NIX Chromium test failed: {str(e)}"
-            app.logger.error(f"Health Check: NIX Chromium test failed: {e}", exc_info=True)
-
-        finally:
-            if original_launch:
-                 try:
-                     BrowserType.launch = original_launch
-                     app.logger.debug("Health Check: Restored original Playwright launch method.")
-                 except Exception as e:
-                     app.logger.warning(f"Health Check: Failed to restore original launch method: {e}")
-
-    else:
-        nix_chromium_output = f"NIX Chromium path not set or invalid: {nix_chromium_path}"
-        app.logger.warning(f"Health Check: {nix_chromium_output}")
-    
-    health_data = {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "environment": {
-            "nix_chromium": {
-                "working": nix_chromium_working,
-                "path": nix_chromium_path if nix_chromium_path else "not set",
-                "output": nix_chromium_output
-            }
-        }
-    }
-    
-    # Update notes logic
-    if not nix_chromium_working:
-         health_data["status"] = "unhealthy"
-         health_data["environment"]["notes"] = f"NIX Chromium test failed. Check logs. Output: {nix_chromium_output}"
-    else: # Simplified from elif nix_chromium_working
-         health_data["environment"]["notes"] = "NIX Chromium appears to be working correctly."
-    
-    # Add system resource information
-    try:
-        import psutil
-        health_data["system_resources"] = get_system_resources()
-    except ImportError:
-        app.logger.warning("psutil not installed, cannot report system resources.")
-        health_data["system_resources"] = {"error": "psutil not installed"}
-    except Exception as e:
-        app.logger.error(f"Error getting system resources: {str(e)}", exc_info=True)
-        health_data["system_resources"] = {"error": f"Error getting system resources: {str(e)}"}
-    
-    # Check OpenAI API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    health_data["environment"]["openai_api_key"] = "available" if api_key and api_key != "your_openai_api_key_here" else "missing"
-    
-    # Get Python version
-    import sys
-    health_data["environment"]["python"] = {
-        "version": sys.version,
-        "executable": sys.executable
-    }
-    
-    # Check Playwright environment variables (update list)
-    playwright_env = {
-        "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS": os.environ.get("PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS", "not set"),
-        "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH": os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH", "not set"),
-        "BROWSER_USE_BROWSER_ARGS": os.environ.get("BROWSER_USE_BROWSER_ARGS", "not set") # Kept this one
-    }
-    
-    # Check if NIX Chromium exists at the specified path
-    chromium_path = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
-    if chromium_path:
-        playwright_env["NIX_CHROMIUM_EXISTS"] = "yes" if os.path.exists(chromium_path) else "no"
-        # Check if the file is executable
-        if os.path.exists(chromium_path):
-            try:
-                playwright_env["NIX_CHROMIUM_EXECUTABLE"] = "yes" if os.access(chromium_path, os.X_OK) else "no"
-            except Exception as e:
-                playwright_env["NIX_CHROMIUM_EXECUTABLE"] = f"check failed: {str(e)}"
-    
-    health_data["environment"]["playwright_env"] = playwright_env
-    
-        # Check installed packages and versions
-        try:
-            import playwright
-            health_data["environment"]["playwright"] = {
-                "status": "installed",
-                "version": getattr(playwright, "__version__", "unknown")
-            }
-        app.logger.debug("Playwright is installed.")
-            
-            # Try to check browsers installation
-            try:
-                from playwright.sync_api import sync_playwright
-                with sync_playwright() as p:
-                    health_data["environment"]["playwright"]["browsers"] = {
-                        "chromium": "available" if hasattr(p, "chromium") else "missing",
-                        "firefox": "available" if hasattr(p, "firefox") else "missing",
-                        "webkit": "available" if hasattr(p, "webkit") else "missing"
-                    }
-                app.logger.debug("Playwright browsers checked.")
-            except Exception as browser_error:
-            app.logger.warning(f"Error checking Playwright browsers: {browser_error}")
-                health_data["environment"]["playwright"]["browsers_error"] = str(browser_error)
-                
-        except ImportError as import_error:
-        app.logger.warning(f"Playwright not installed: {import_error}")
-            health_data["environment"]["playwright"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
-        try:
-            import browser_use
-            health_data["environment"]["browser_use"] = {
-                "status": "installed",
-                "version": getattr(browser_use, "__version__", "unknown")
-            }
-        app.logger.debug("browser-use is installed.")
-            
-            # Check browser_use Agent constructor parameters
-            try:
-                import inspect
-                agent_params = inspect.signature(browser_use.Agent.__init__).parameters
-                param_names = list(agent_params.keys())
-                # Remove 'self' from the list if present
-                if 'self' in param_names:
-                    param_names.remove('self')
-                health_data["environment"]["browser_use"]["supported_params"] = param_names
-            app.logger.debug(f"browser_use Agent params: {param_names}")
-            except Exception as param_error:
-            app.logger.warning(f"Error checking browser_use params: {param_error}")
-                health_data["environment"]["browser_use"]["param_error"] = str(param_error)
-        except ImportError as import_error:
-        app.logger.warning(f"browser-use not installed: {import_error}")
-            health_data["environment"]["browser_use"] = {
-                "status": "missing",
-                "error": str(import_error)
-            }
-        
-        # Check for system libraries that Playwright needs
-        system_deps = {}
-        for lib in ["libnss3", "libxrandr2", "libgbm1", "libxshmfence1", "libdrm2"]:
-            try:
-                result = subprocess.run(["ldconfig", "-p"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if lib in result.stdout:
-                    system_deps[lib] = "found"
-                else:
-                    system_deps[lib] = "not found in ldconfig"
-            except Exception as e:
-            app.logger.warning(f"System dependency check failed for {lib}: {e}")
-                system_deps[lib] = f"check failed: {str(e)}"
-    health_data["environment"]["system_dependencies"] = system_deps
-    app.logger.debug(f"System dependencies check: {system_deps}")
-
-    # Update overall status check (remove simulation mode condition)
-    api_key_ok = health_data["environment"]["openai_api_key"] == "available"
-    playwright_ok = health_data["environment"].get("playwright", {}).get("status") == "installed"
-    browser_use_ok = health_data["environment"].get("browser_use", {}).get("status") == "installed"
-
-    if not all([api_key_ok, playwright_ok, browser_use_ok, nix_chromium_working]):
-            health_data["status"] = "unhealthy"
-        # Add more specific notes if needed
-        if not api_key_ok: 
-            health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " OpenAI API Key missing."
-        if not playwright_ok: 
-            health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " Playwright missing/error."
-        if not browser_use_ok: 
-            health_data["environment"]["notes"] = health_data["environment"].get("notes", "") + " browser-use missing/error."
-        # Note for nix chromium failure already added above
-        
-    app.logger.info(f"Health check completed. Status: {health_data['status']}")
-    return jsonify(health_data), 200
+# New Detailed Diagnostics Endpoint
+@app.route("/diagnostics", methods=["GET"])
+@require_api_key # Protect this endpoint
+def diagnostics():
+    """Runs detailed environment diagnostics and returns the results."""
+    app.logger.info("Detailed diagnostics endpoint called...")
+    # Call the function from the other file, passing the app's logger
+    diagnostic_data = perform_detailed_diagnostics(app.logger)
+    # Determine status code based on results
+    status_code = 200 if diagnostic_data.get("overall_status") == "healthy" else 503 # Service Unavailable
+    return jsonify(diagnostic_data), status_code
 
 if __name__ == "__main__":
     # Use Flask's default run for development, which handles reloading.

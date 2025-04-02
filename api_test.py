@@ -37,12 +37,57 @@ if not API_KEY or API_KEY == "your_internal_api_secret_key_here":
     print("Please set your secret API key in the .env file.")
     sys.exit(1)
 
-# Construct API URL (remove trailing slash from BASE_URL if present)
+# Construct URLs and Headers
 API_URL = f"{BASE_URL.rstrip('/')}/api/browser-tasks"
+DIAGNOSTICS_URL = f"{BASE_URL.rstrip('/')}/diagnostics" # New URL for diagnostics
 HEADERS = {
     "Content-Type": "application/json",
     "X-API-Key": API_KEY
 }
+
+# --- New Diagnostics Test Function ---
+def test_diagnostics_endpoint():
+    print("--- Testing /diagnostics Endpoint --- ")
+    try:
+        print(f"Calling GET {DIAGNOSTICS_URL}...")
+        response = requests.get(DIAGNOSTICS_URL, headers=HEADERS, timeout=60) # Add timeout
+        
+        # Check if the call itself was successful (200 OK or 503 Service Unavailable are expected)
+        if response.status_code == 200:
+            print(f"Diagnostics call successful (Status Code: {response.status_code})")
+        elif response.status_code == 503:
+             print(f"Diagnostics call successful, API reported unhealthy (Status Code: {response.status_code})")
+        else:
+            # Raise an exception for other unexpected status codes
+            response.raise_for_status() 
+            
+        # Print the detailed diagnostics report
+        print("Diagnostics Report:")
+        try:
+            diagnostics_data = response.json()
+            print(json.dumps(diagnostics_data, indent=2))
+            # Optionally, log the reported overall status
+            overall_status = diagnostics_data.get("overall_status", "unknown")
+            print(f"Reported Overall Status: {overall_status}")
+        except json.JSONDecodeError:
+            print("Error: Could not decode JSON response from /diagnostics")
+            print(f"Raw response text: {response.text[:500]}...") # Print first 500 chars
+            
+    except requests.exceptions.Timeout:
+        print("Error: Request to /diagnostics timed out.")
+    except requests.exceptions.RequestException as e:
+        print(f"Error calling /diagnostics endpoint: {e}")
+        if e.response is not None:
+            try:
+                print(f"Response Status Code: {e.response.status_code}")
+                print(f"Response Body: {e.response.text[:500]}...")
+            except:
+                pass
+    except Exception as e:
+        print(f"An unexpected error occurred during diagnostics test: {e}")
+    finally:
+        print("--- Diagnostics Test Finished --- \n")
+# --- End Diagnostics Test Function ---
 
 print(f"--- API Test Script ---")
 # Update print statement to use BASE_URL variable
@@ -54,6 +99,9 @@ if TEST_MODEL:
 else:
     print("Model: Using API default")
 print("-----------------------")
+
+# --- Run Diagnostics Test First ---
+test_diagnostics_endpoint() 
 
 # --- 1. Create Task ---
 task_id = None

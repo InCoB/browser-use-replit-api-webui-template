@@ -31,7 +31,9 @@ async function proxyRequest(req: Request, res: Response, endpoint: string) {
       //  await startPythonApi();
       // }
 
-      const url = `http://localhost:5001${endpoint}`;
+      // Use environment variable for target URL, default to 5000
+      const pythonApiBaseUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const url = `${pythonApiBaseUrl.replace(/\/$/, '')}${endpoint}`;
       console.log(`Proxying ${req.method} request to ${url}`);
       
       // Construct headers for the outgoing request
@@ -119,7 +121,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/browser-tasks", (req, res) => proxyRequest(req, res, "/api/browser-tasks"));
   app.get("/api/browser-tasks/:taskId", (req, res) => proxyRequest(req, res, `/api/browser-tasks/${req.params.taskId}`));
   app.get("/api/supported-models", (req, res) => proxyRequest(req, res, "/api/supported-models"));
-  app.get("/api/health", (req, res) => proxyRequest(req, res, "/api/health"));
+  
+  // Fix health route to match backend and simplify path
+  app.get("/health", (req, res) => proxyRequest(req, res, "/health"));
+  
+  // Add diagnostics route
+  app.get("/diagnostics", (req, res) => proxyRequest(req, res, "/diagnostics"));
+  
   // Demo execution endpoint
   app.post("/api/demo/execute", async (req, res) => {
     try {
