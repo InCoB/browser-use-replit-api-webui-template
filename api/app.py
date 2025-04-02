@@ -71,19 +71,19 @@ app.logger.info(f"Log Level: {log_level_name}")
 # Configure Playwright in Replit environment
 if os.environ.get('REPL_ID'):
     app.logger.debug("Replit environment detected, configuring resource limits and Playwright...")
-    # Add ulimit settings to increase file descriptor and process limits
-    try:
-        import resource
-        # Try to increase the file descriptor limit
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+# Add ulimit settings to increase file descriptor and process limits
+try:
+    import resource
+    # Try to increase the file descriptor limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
         app.logger.debug(f"File descriptor limit set to {hard}")
-        
-        # Try to increase the process limit
-        soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
-        resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
+    
+    # Try to increase the process limit
+    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+    resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
         app.logger.debug(f"Process limit set to {hard}")
-    except Exception as e:
+except Exception as e:
         app.logger.warning(f"Could not increase resource limits: {str(e)}")
 
     # Configure Playwright environment variables
@@ -153,8 +153,8 @@ def get_model_instance(model_name):
         else:
             # Fallback or default model (e.g., default to gpt-4o)
             app.logger.warning(f"Unknown model prefix for '{model_name}'. Defaulting to gpt-4o.")
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key or api_key == "your_openai_api_key_here":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
                 app.logger.error("OpenAI API key not configured for default model.")
                 raise ValueError("OpenAI API key not configured for default model.")
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
@@ -217,26 +217,26 @@ async def run_browser_task(task_id, task_description, model_name):
 
             # Store original launch method if not already stored
             if 'original_launch' not in locals() or original_launch is None:
-                original_launch = BrowserType.launch
+                    original_launch = BrowserType.launch
                 app.logger.debug("Original Playwright launch method captured.")
-                
-                # Define our patched launch method
-                def patched_launch(self, **kwargs):
+                    
+                    # Define our patched launch method
+                    def patched_launch(self, **kwargs):
                     app.logger.debug(f"Patched Playwright launch called, forcing executablePath={chromium_path} and headless=True")
-                    kwargs['executablePath'] = chromium_path
+                        kwargs['executablePath'] = chromium_path
                     kwargs['headless'] = True
-                    if 'env' not in kwargs or kwargs['env'] is None:
-                        kwargs['env'] = {}
-                    if isinstance(kwargs['env'], dict):
-                        kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+                        if 'env' not in kwargs or kwargs['env'] is None:
+                            kwargs['env'] = {}
+                        if isinstance(kwargs['env'], dict):
+                            kwargs['env']['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
                     if original_launch:
                         return original_launch(self, **kwargs)
                     else:
                         app.logger.error("Original Playwright launch method not captured before patching.")
                         raise RuntimeError("Original Playwright launch method not captured.")
-                
-                # Apply the patch
-                BrowserType.launch = patched_launch
+                    
+                    # Apply the patch
+                    BrowserType.launch = patched_launch
                 app.logger.debug("Playwright monkey patch applied.")
             else:
                 app.logger.debug("Playwright patch already applied.")
@@ -357,9 +357,9 @@ def create_browser_task():
         except Exception as e:
             # Catch errors during the scheduling/submission itself
             app.logger.error(f"Failed to schedule task {task_id} using ThreadPoolExecutor: {e}", exc_info=True)
-            tasks[task_id]["status"] = "failed"
+                tasks[task_id]["status"] = "failed"
             tasks[task_id]["error"] = f"Failed to start task: {e}"
-            tasks[task_id]["updated_at"] = datetime.now().isoformat()
+                tasks[task_id]["updated_at"] = datetime.now().isoformat()
             # Return error immediately if scheduling fails
             return jsonify({"error": f"Failed to schedule task: {e}"}), 500
         # --- End Restore --- 
