@@ -71,20 +71,20 @@ app.logger.info(f"Log Level: {log_level_name}")
 # Configure Playwright in Replit environment
 if os.environ.get('REPL_ID'):
     app.logger.debug("Replit environment detected, configuring resource limits and Playwright...")
-# Add ulimit settings to increase file descriptor and process limits
-try:
-    import resource
-    # Try to increase the file descriptor limit
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-    app.logger.debug(f"File descriptor limit set to {hard}")
-    
-    # Try to increase the process limit
-    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
-    resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
-    app.logger.debug(f"Process limit set to {hard}")
-except Exception as e:
-    app.logger.warning(f"Could not increase resource limits: {str(e)}")
+    # Add ulimit settings to increase file descriptor and process limits
+    try:
+        import resource
+        # Try to increase the file descriptor limit
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+        app.logger.debug(f"File descriptor limit set to {hard}")
+        
+        # Try to increase the process limit
+        soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+        resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
+        app.logger.debug(f"Process limit set to {hard}")
+    except Exception as e:
+        app.logger.warning(f"Could not increase resource limits: {str(e)}")
 
     # Configure Playwright environment variables
     os.environ["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] = "1"
