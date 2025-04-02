@@ -169,11 +169,14 @@ def perform_detailed_diagnostics(logger: logging.Logger):
 
     # --- 4. Python Environment ---
     logger.debug("Diagnostic Check 4: Python Environment")
+    is_replit = bool(os.environ.get('REPL_ID'))
     health_data["environment_details"]["python"] = {
         "version": sys.version,
         "executable": sys.executable,
         "platform": platform.platform(),
+        "running_in_replit": is_replit
     }
+    logger.info(f"Replit Environment Detected: {is_replit}")
 
     # --- 5. Playwright Environment Variables ---
     logger.debug("Diagnostic Check 5: Playwright Env Vars")
@@ -267,33 +270,8 @@ def perform_detailed_diagnostics(logger: logging.Logger):
         health_data["notes"].append("psutil package not found.")
     health_data["checks"]["installed_packages"] = packages_status
 
-    # --- 7. Playwright Patch Check (New) ---
-    logger.debug("Diagnostic Check 7: Playwright Patch Status")
-    patch_status = "unknown"
-    try:
-        from playwright._impl._browser_type import BrowserType
-        if hasattr(BrowserType.launch, '__is_patched') and BrowserType.launch.__is_patched:
-            patch_status = "active"
-            logger.info("Playwright launch method is currently patched.")
-        else:
-            patch_status = "inactive"
-            logger.info("Playwright launch method is NOT currently patched.")
-            # Add a warning if we are in Replit but the patch isn't active
-            if os.environ.get('REPL_ID'):
-                logger.warning("Running in Replit, but Playwright patch is unexpectedly inactive!")
-                health_data["notes"].append("Playwright patch inactive in Replit.")
-    except ImportError:
-        patch_status = "error_playwright_missing"
-        logger.error("Could not check patch status: Playwright not importable.")
-        health_data["notes"].append("Playwright missing, patch check skipped.")
-    except Exception as e:
-        patch_status = f"error_checking: {e}"
-        logger.error(f"Could not check patch status: {e}", exc_info=True)
-        health_data["notes"].append("Error checking Playwright patch status.")
-    health_data["checks"]["playwright_patch"] = {"status": patch_status}
-
-    # --- 8. System Dependencies Check (Linux Only) ---
-    logger.debug("Diagnostic Check 8: System Dependencies (Linux)")
+    # --- 7. System Dependencies Check (Linux Only) ---
+    logger.debug("Diagnostic Check 7: System Dependencies (Linux)")
     system_deps = {}
     if platform.system() == "Linux":
         libs_to_check = [
@@ -369,16 +347,14 @@ def perform_detailed_diagnostics(logger: logging.Logger):
         system_deps["status"] = f"Skipped (Platform: {platform.system()})"
     health_data["checks"]["system_dependencies"] = system_deps
 
-    # --- 9. Final Status Determination ---
+    # --- 8. Final Status Determination ---
     logger.debug("Determining Overall Status for Diagnostics")
     all_clear = all([
         nix_chromium_working,
         api_key_status == "available",
         packages_status.get("playwright", {}).get("status") == "installed",
         packages_status.get("browser_use", {}).get("status") == "installed",
-        packages_status.get("psutil", {}).get("status") == "installed",
-        # Optionally add patch status to overall health if critical
-        # patch_status == "active" if os.environ.get('REPL_ID') else True 
+        packages_status.get("psutil", {}).get("status") == "installed"
     ])
     health_data["overall_status"] = "healthy" if all_clear else "unhealthy"
 

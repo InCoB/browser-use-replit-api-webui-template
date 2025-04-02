@@ -38,7 +38,8 @@ A brief description of your project.
 ## Browser Automation Notes
 
 *   This project is configured to use the Chromium browser provided by the Nix environment (`replit.nix`) instead of downloading one via Playwright.
-*   Playwright's browser launch mechanism is monkey-patched in `api/app.py` to force the use of the Nix Chromium executable and ensure it runs in headless mode, which is necessary for Replit's environment.
+*   Playwright's browser launch mechanism is monkey-patched conditionally in `api/app.py` when running in Replit to force the use of the Nix Chromium executable and ensure it runs in headless mode.
+*   The `/diagnostics` endpoint verifies that the Nix Chromium executable can be launched successfully and reports whether the Replit environment (`REPL_ID`) is detected, which determines if the patch should be active during task execution.
 
 ## Logging
 
