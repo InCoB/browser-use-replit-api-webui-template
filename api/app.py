@@ -77,12 +77,12 @@ try:
     # Try to increase the file descriptor limit
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-        app.logger.debug(f"File descriptor limit set to {hard}")
+    app.logger.debug(f"File descriptor limit set to {hard}")
     
     # Try to increase the process limit
     soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
     resource.setrlimit(resource.RLIMIT_NPROC, (hard, hard))
-        app.logger.debug(f"Process limit set to {hard}")
+    app.logger.debug(f"Process limit set to {hard}")
 except Exception as e:
         app.logger.warning(f"Could not increase resource limits: {str(e)}")
 
