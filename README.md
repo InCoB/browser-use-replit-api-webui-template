@@ -1,6 +1,5 @@
 # Browser-Use Replit + API
-
-A brief description of your project.
+https://github.com/browser-use/browser-use running in replit 
 
 ## Setup & Running
 
