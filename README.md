@@ -3,6 +3,8 @@ https://github.com/browser-use/browser-use running in replit
 
 ## Setup & Running
 
+[replit link https://replit.com/@nksokolo/Browser-Use-Replit-Template?v=1]
+
 1.  **Environment:** This project uses Poetry for Python dependency management within a Replit environment configured via Nix. The Node.js frontend/proxy and Python Flask backend are run concurrently.
 
 2.  **Nix Environment Dependencies (Important):**
