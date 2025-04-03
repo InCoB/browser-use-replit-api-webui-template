@@ -1,4 +1,4 @@
-# Project Name (Replace)
+# Browser-Use Replit + API
 
 A brief description of your project.
 
@@ -23,8 +23,10 @@ A brief description of your project.
     *   Fill in your `GOOGLE_API_KEY` (required if using Gemini models).
     *   **API Key:** Generate a secure secret key (e.g., a UUID) and set it for both `EXTERNAL_API_KEY` and `VITE_EXTERNAL_API_KEY`.
         *   `EXTERNAL_API_KEY`: Used by the Python backend (`api/auth.py`) to verify incoming requests to protected endpoints.
-        *   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.**
-    *   Verify the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` is correct for your Replit environment (run `which chromium | cat` in the shell if needed).
+        *   `VITE_EXTERNAL_API_KEY`: Exposed specifically to the frontend build process (via Vite) so the UI (`client/src/lib/queryClient.ts`) can send the key in its requests to the backend. **Both variables in `.env` should have the same secret value.** ---->>> PLEASE SEE KNOWN ISSUES AS THEY KEY IS HARDCODED
+    *   Verify the `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` is correct for your Replit environment (run `which chromium | cat` in the shell if needed).///
+
+
 
 5.  **Running:** 
     *   Click the **"Run" button** in the Replit UI.
@@ -34,6 +36,59 @@ A brief description of your project.
         *   `npm run server`: Starts the Node.js Express server (proxy).
         *   `npm run api`: Starts the Python Flask API backend using the Python interpreter within `.pythonlibs` (`./.pythonlibs/bin/python -m api.app`).
     *   You can view the frontend UI in the "Webview" tab.
+
+6. **Running without Server (No Server Required)**
+
+This project includes standalone example scripts that demonstrate how to use the browser automation functionality directly, without launching the full server stack:
+
+### Simple Browser Check
+
+**examples/Simple.py**: A basic script to verify browser configuration and accessibility:
+
+```bash
+python examples/Simple.py
+```
+
+This script:
+* Verifies environment variables and Python version
+* Applies the Playwright monkey patch for NIX Chromium
+* Tests browser launch, navigation, and basic interaction
+* Diagnostics browser compatibility issues
+
+### Advanced Browser Automation with Chat
+
+**examples/chat_after_finish.py**: A comprehensive example with custom patches and interactive chat:
+
+```bash
+python examples/chat_after_finish.py
+```
+
+This script:
+* Applies several patches to improve browser-use behavior:
+  * Fixes memory initialization
+  * Forces main LLM for planning
+  * Adds error recovery and self-correction
+* Adds custom JavaScript execution and iframe content extraction actions
+* Runs a complex browser automation task
+* Provides an interactive chat interface with the LLM after task completion
+
+### Using Examples vs. Server API
+
+**Direct Script Usage:**
+* Faster to start and simpler for testing/experimentation
+* Doesn't require multiple services to be running
+* More control over specific implementation details
+* Better for debugging browser-use functionality
+* Allows interactive chat with LLM after task completion
+
+**Server API Approach:**
+* Provides a RESTful API for programmatic access
+* Supports multiple clients and concurrent requests
+* Better for production deployments
+* Cleanly separates frontend and backend concerns
+* More scalable for multiple users/applications
+
+
 
 ## Browser Automation Notes
 
@@ -77,22 +132,47 @@ The Python API (`api/app.py`) uses Python's standard `logging` module.
 
 *   **Resource Limits:** Monitor Replit Console for crashes due to memory/CPU limits.
 
-## Testing the API
+## Testing the API, Browser Automation, and Environment
 
-A simple Python script `api_test.py` is included to verify basic API functionality.
+The project includes a comprehensive testing script that verifies multiple components:
 
-1.  **Ensure the main application is running** (click the "Run" button).
-2.  **Configure `.env**:** Make sure `API_BASE_URL` and `EXTERNAL_API_KEY` are correctly set in your `.env` file.
-3.  **Run the test:** Open the **Shell** tab and execute:
-    ```bash
-    python api_test.py
-    ```
-4.  **Expected Output:** The script will attempt to create a simple task ("Go to example.com...") and poll for its status. It should print the progress and finish with a "completed" status and the extracted heading from example.com. It exits with code 0 on success and 1 on failure.
+**main_test.py**: Tests the following:
 
-This test helps confirm:
-*   The API server is running and accessible.
-*   API key authentication is working.
-*   The basic browser automation task lifecycle (create, run, complete) functions.
+**1. Environment Diagnostics:**
+* Tests the `/diagnostics` endpoint 
+* Verifies Nix Chromium installation and executable access
+* Checks system resources (memory, CPU usage)
+* Validates environment variables and API key availability
+* Confirms Python environment and Playwright configuration
+
+**2. Browser Automation:**
+* Creates a real browser automation task using the configured Chromium
+* Verifies browser launch, navigation, and content extraction
+* Tests the complete browser lifecycle from initialization to cleanup
+
+**3. API Functionality:**  
+* Tests API authentication with the configured API key
+* Verifies task creation, status polling, and result retrieval
+* Validates error handling and response format
+* Confirms thread and resource management
+
+### Running the Test
+
+1. **Ensure the main application is running** (click the "Run" button).
+2. **Configure `.env`:** Make sure `API_BASE_URL` and `EXTERNAL_API_KEY` are correctly set in your `.env` file.
+3. **Run the test script:** Open the **Shell** tab and execute:
+   ```bash
+   python main_test.py
+   ```
+
+### Expected Output
+The test script produces a comprehensive report including:
+* Detailed diagnostics about your environment configuration
+* Browser execution status and compatibility information
+* Raw API responses with task status transitions
+* Final extracted content from the automated browser session
+
+This comprehensive test ensures all components of the system are working correctly together, from environment configuration to browser automation to API communication.
 
 ## Known Issues ⚠️
 
@@ -101,3 +181,5 @@ This test helps confirm:
     *   Look for the `// TODO: Fix Vite .env loading and remove hardcoded key` comments.
     *   Failure to do this will result in authentication errors when using the web UI.
 *   **`RuntimeError: Event loop is closed`:** You may occasionally see this error in the Replit Console logs *after* a browser task completes successfully. This appears related to the cleanup of asynchronous network resources (like those used by `httpx` within underlying libraries) after the background task's event loop has finished. In this template's current configuration, it usually doesn't affect the task's successful execution or results, but indicates imperfect async resource management during shutdown.
+
+
