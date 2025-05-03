@@ -18,6 +18,7 @@ import functools
 import json
 import logging  # Import logging for patch logger
 import time  # Import time for patch timing
+from typing import Optional  # Add Optional for type hints
 
 # --- Early Imports ---
 try:
@@ -192,14 +193,24 @@ if AGENT_CLASS_AVAILABLE:
             tokens = 0
             correction_triggered_this_step = False
             try:  # Outer try
-                state = await self.browser_context.get_state()
+                # Fix for newer browser-use versions that require cache_clickable_elements_hashes parameter
+                try:
+                    state = await self.browser_context.get_state(cache_clickable_elements_hashes=True)
+                except TypeError:
+                    # Fallback for older versions
+                    state = await self.browser_context.get_state()
                 active_page = await self.browser_context.get_current_page()
-                if (
-                    self.settings.enable_memory
-                    and self.memory
-                    and self.state.n_steps % self.settings.memory_interval == 0
-                ):
-                    self.memory.create_procedural_memory(self.state.n_steps)
+                # Fix for newer versions where memory settings might be different
+                try:
+                    if (
+                        getattr(self.settings, "enable_memory", False)
+                        and self.memory
+                        and self.state.n_steps % getattr(self.settings, "memory_interval", 10) == 0
+                    ):
+                        self.memory.create_procedural_memory(self.state.n_steps)
+                except AttributeError:
+                    # Skip memory operations if attributes don't exist
+                    pass
                 await self._raise_if_stopped_or_paused()
                 await self._update_action_models_for_page(active_page)
                 self._message_manager.add_state_message(
@@ -259,9 +270,16 @@ if AGENT_CLASS_AVAILABLE:
                         HumanMessage(content=error_msg_for_llm)
                     )
                     try:
-                        current_state_after_fail = (
-                            await self.browser_context.get_state()
-                        )
+                        # Fix for newer browser-use versions that require cache_clickable_elements_hashes parameter
+                        try:
+                            current_state_after_fail = (
+                                await self.browser_context.get_state(cache_clickable_elements_hashes=True)
+                            )
+                        except TypeError:
+                            # Fallback for older versions
+                            current_state_after_fail = (
+                                await self.browser_context.get_state()
+                            )
                         self._message_manager.add_state_message(
                             current_state_after_fail,
                             None,
@@ -317,9 +335,16 @@ if AGENT_CLASS_AVAILABLE:
                         HumanMessage(content=error_msg_for_llm)
                     )
                     try:
-                        current_state_after_fail = (
-                            await self.browser_context.get_state()
-                        )
+                        # Fix for newer browser-use versions that require cache_clickable_elements_hashes parameter
+                        try:
+                            current_state_after_fail = (
+                                await self.browser_context.get_state(cache_clickable_elements_hashes=True)
+                            )
+                        except TypeError:
+                            # Fallback for older versions
+                            current_state_after_fail = (
+                                await self.browser_context.get_state()
+                            )
                         self._message_manager.add_state_message(
                             current_state_after_fail,
                             None,
